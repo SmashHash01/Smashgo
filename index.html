@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="description" content="Neon Delivery — Cyberpunk top-down drone courier game. Race through a futuristic neon city, pick up packages, dodge traffic and police, build insane combos!">
+    <meta name="theme-color" content="#020810">
+    <title>NEON DELIVERY — Cyberpunk Drone Courier</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="game-container">
+
+    <!-- ── Main game canvas ─────────────────────────────────── -->
+    <canvas id="game-canvas" aria-label="Neon Delivery game canvas"></canvas>
+
+    <!-- ── Mute button ──────────────────────────────────────── -->
+    <button id="mute-btn" title="Toggle sound" aria-label="Toggle sound">🔊</button>
+
+    <!-- ── Touch controls (shown on touch devices via JS) ───── -->
+    <div id="touch-controls" aria-hidden="true">
+        <div id="joystick-zone" role="presentation">
+            <div id="joystick-base">
+                <div id="joystick-knob"></div>
+            </div>
+        </div>
+        <button id="boost-btn" aria-label="Boost">
+            <span>⚡</span>
+            <small>BOOST</small>
+        </button>
+    </div>
+
+    <!-- ── Overlay container ────────────────────────────────── -->
+    <div id="overlay-container">
+
+        <!-- ┌─────────────────────────────────────────────────────────┐ -->
+        <!-- │  MAIN MENU                                              │ -->
+        <!-- └─────────────────────────────────────────────────────────┘ -->
+        <div id="menu-overlay" class="overlay active" role="dialog" aria-label="Main menu">
+            <div class="overlay-content">
+                <!-- Logo -->
+                <div class="game-logo">
+                    <div class="logo-line-1">NEON</div>
+                    <div class="logo-line-2">DELIVERY</div>
+                    <div class="logo-tagline">Cyberpunk Drone Courier</div>
+                </div>
+
+                <!-- Stats -->
+                <div class="menu-stats">
+                    <div class="stat-card">
+                        <div class="stat-label">High Score</div>
+                        <div class="stat-value" id="menu-high-score">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Best Level</div>
+                        <div class="stat-value" id="menu-best-level">1</div>
+                    </div>
+                </div>
+
+                <!-- Start button -->
+                <button class="btn-primary" id="btn-start">START MISSION</button>
+
+                <!-- Controls hint -->
+                <div class="controls-hint">
+                    <span>WASD / ARROWS — Move &nbsp;|&nbsp; SPACE — Boost</span>
+                    <span>Fly to 📦 to pick up &nbsp;|&nbsp; Fly to ◎ to deliver</span>
+                    <span>P / ESC — Pause</span>
+                </div>
+            </div>
+            <div class="scanline-overlay"></div>
+        </div>
+
+        <!-- ┌─────────────────────────────────────────────────────────┐ -->
+        <!-- │  PAUSED                                                 │ -->
+        <!-- └─────────────────────────────────────────────────────────┘ -->
+        <div id="pause-overlay" class="overlay" role="dialog" aria-label="Game paused">
+            <div class="overlay-content compact">
+                <h2 class="overlay-title">PAUSED</h2>
+                <button class="btn-primary" id="btn-resume">RESUME</button>
+                <button class="btn-secondary" id="btn-quit">QUIT TO MENU</button>
+            </div>
+        </div>
+
+        <!-- ┌─────────────────────────────────────────────────────────┐ -->
+        <!-- │  LEVEL COMPLETE                                         │ -->
+        <!-- └─────────────────────────────────────────────────────────┘ -->
+        <div id="levelcomplete-overlay" class="overlay" role="dialog" aria-label="Level complete">
+            <div class="overlay-content">
+                <div class="level-badge">LEVEL <span id="lc-level">1</span> COMPLETE</div>
+                <div class="score-breakdown">
+                    <div class="sb-row">
+                        <span>DELIVERIES</span>
+                        <span id="lc-deliveries">0</span>
+                    </div>
+                    <div class="sb-row">
+                        <span>TOTAL SCORE</span>
+                        <span id="lc-score">0</span>
+                    </div>
+                    <div class="sb-row highlight">
+                        <span>COINS EARNED</span>
+                        <span id="lc-coins">+0</span>
+                    </div>
+                </div>
+                <button class="btn-primary" id="btn-next-level">NEXT LEVEL ›</button>
+            </div>
+        </div>
+
+        <!-- ┌─────────────────────────────────────────────────────────┐ -->
+        <!-- │  GAME OVER                                              │ -->
+        <!-- └─────────────────────────────────────────────────────────┘ -->
+        <div id="gameover-overlay" class="overlay" role="dialog" aria-label="Game over">
+            <div class="overlay-content">
+                <div class="gameover-title">SIGNAL LOST</div>
+                <div class="gameover-sub">DRONE OFFLINE</div>
+                <div class="score-breakdown">
+                    <div class="sb-row">
+                        <span>FINAL SCORE</span>
+                        <span id="go-score">0</span>
+                    </div>
+                    <div class="sb-row">
+                        <span>HIGH SCORE</span>
+                        <span id="go-high-score">0</span>
+                    </div>
+                    <div class="sb-row">
+                        <span>LEVEL REACHED</span>
+                        <span id="go-level">1</span>
+                    </div>
+                    <div class="sb-row highlight">
+                        <span>MAX COMBO</span>
+                        <span id="go-combo">x1</span>
+                    </div>
+                </div>
+                <div class="go-buttons">
+                    <button class="btn-primary" id="btn-retry">RETRY</button>
+                    <button class="btn-secondary" id="btn-menu">MENU</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ┌─────────────────────────────────────────────────────────┐ -->
+        <!-- │  OVERDRIVE notification (canvas-layer, no pointer)      │ -->
+        <!-- └─────────────────────────────────────────────────────────┘ -->
+        <div id="overdrive-overlay" aria-live="assertive" aria-label="Overdrive activated">
+            <div class="overdrive-content">
+                <div class="od-icon">⚡</div>
+                <div class="od-title">OVERDRIVE x8</div>
+                <div class="od-effects">
+                    BOOST RECHARGE +50%<br>
+                    SCORE MULTIPLIER ×8
+                </div>
+                <div class="od-icon">⚡</div>
+            </div>
+        </div>
+
+    </div><!-- /overlay-container -->
+</div><!-- /game-container -->
+
+<!-- ── Scripts — load order is dependency order ─────────────── -->
+<script src="src/config.js"></script>
+<script src="src/storage.js"></script>
+<script src="src/input.js"></script>
+<script src="src/audio.js"></script>
+<script src="src/upgrades.js"></script>
+<script src="src/world.js"></script>
+<script src="src/camera.js"></script>
+<script src="src/drone.js"></script>
+<script src="src/entities.js"></script>
+<script src="src/particles.js"></script>
+<script src="src/events.js"></script>
+<script src="src/renderer.js"></script>
+<script src="src/ui.js"></script>
+<script src="src/main.js"></script>
+
+</body>
+</html>

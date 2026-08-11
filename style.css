@@ -1,0 +1,507 @@
+/* ============================================================
+   NEON DELIVERY — style.css
+   Dark cyberpunk aesthetic: deep navy base, neon accents.
+   Canvas scales responsively via JS; overlays use CSS.
+   ============================================================ */
+
+/* ── Reset & base ──────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #020810;
+    font-family: 'Rajdhani', 'Segoe UI', sans-serif;
+    color: #c8e8ff;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+}
+
+/* ── Game container ────────────────────────────────────────── */
+#game-container {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+/* ── Canvas ────────────────────────────────────────────────── */
+#game-canvas {
+    display: block;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    /* Actual pixel size set by JS; CSS size set responsively */
+}
+
+/* ── Mute button ───────────────────────────────────────────── */
+#mute-btn {
+    position: absolute;
+    top: 12px;
+    right: 14px;
+    z-index: 200;
+    background: rgba(2,8,20,0.72);
+    border: 1px solid rgba(0,245,255,0.25);
+    color: #c8e8ff;
+    font-size: 18px;
+    width: 36px;
+    height: 36px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 0.2s, background 0.2s;
+}
+#mute-btn:hover {
+    border-color: rgba(0,245,255,0.6);
+    background: rgba(0,245,255,0.08);
+}
+
+/* ── Overlay system ────────────────────────────────────────── */
+#overlay-container {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 100;
+}
+
+.overlay {
+    position: absolute;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.overlay.active {
+    display: flex;
+    pointer-events: all;
+    opacity: 1;
+}
+
+/* Scanline effect on menu */
+.scanline-overlay {
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+        to bottom,
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,0.12) 2px,
+        rgba(0,0,0,0.12) 4px
+    );
+    pointer-events: none;
+}
+
+/* ── Overlay content card ──────────────────────────────────── */
+.overlay-content {
+    position: relative;
+    background: rgba(4,10,28,0.94);
+    border: 1px solid rgba(0,245,255,0.25);
+    border-radius: 12px;
+    padding: 40px 48px;
+    max-width: 480px;
+    width: 90%;
+    text-align: center;
+    box-shadow:
+        0 0 40px rgba(0,245,255,0.08),
+        0 0 80px rgba(0,0,0,0.6),
+        inset 0 1px 0 rgba(0,245,255,0.1);
+    backdrop-filter: blur(6px);
+}
+
+.overlay-content.compact {
+    padding: 32px 40px;
+}
+
+/* ── Menu ──────────────────────────────────────────────────── */
+.game-logo {
+    margin-bottom: 28px;
+    line-height: 1;
+}
+
+.logo-line-1 {
+    font-family: 'Orbitron', monospace;
+    font-size: 52px;
+    font-weight: 900;
+    color: #00f5ff;
+    text-shadow:
+        0 0 20px rgba(0,245,255,0.8),
+        0 0 50px rgba(0,245,255,0.4),
+        0 0 80px rgba(0,245,255,0.2);
+    letter-spacing: 8px;
+    animation: logoPulse 3s ease-in-out infinite;
+}
+
+.logo-line-2 {
+    font-family: 'Orbitron', monospace;
+    font-size: 38px;
+    font-weight: 700;
+    color: #ff00cc;
+    text-shadow:
+        0 0 20px rgba(255,0,204,0.8),
+        0 0 50px rgba(255,0,204,0.4);
+    letter-spacing: 6px;
+    margin-top: 4px;
+}
+
+.logo-tagline {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 4px;
+    color: rgba(0,245,255,0.45);
+    margin-top: 12px;
+    text-transform: uppercase;
+}
+
+@keyframes logoPulse {
+    0%, 100% { text-shadow: 0 0 20px rgba(0,245,255,0.8), 0 0 50px rgba(0,245,255,0.4); }
+    50%       { text-shadow: 0 0 30px rgba(0,245,255,1),   0 0 70px rgba(0,245,255,0.6); }
+}
+
+.menu-stats {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    margin-bottom: 28px;
+}
+
+.stat-card {
+    background: rgba(0,245,255,0.05);
+    border: 1px solid rgba(0,245,255,0.15);
+    border-radius: 8px;
+    padding: 12px 20px;
+    min-width: 110px;
+}
+
+.stat-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: rgba(0,245,255,0.5);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+}
+
+.stat-value {
+    font-family: 'Orbitron', monospace;
+    font-size: 22px;
+    font-weight: 700;
+    color: #00f5ff;
+    text-shadow: 0 0 12px rgba(0,245,255,0.5);
+}
+
+.controls-hint {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 16px;
+    font-size: 12px;
+    color: rgba(0,245,255,0.35);
+    letter-spacing: 1px;
+}
+
+/* ── Buttons ───────────────────────────────────────────────── */
+.btn-primary, .btn-secondary {
+    display: block;
+    width: 100%;
+    padding: 14px 28px;
+    border-radius: 6px;
+    font-family: 'Orbitron', monospace;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+    margin-top: 12px;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #00c8ff 0%, #0088cc 100%);
+    color: #020810;
+    box-shadow: 0 0 20px rgba(0,200,255,0.4), 0 4px 12px rgba(0,0,0,0.4);
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #00f5ff 0%, #00aaff 100%);
+    box-shadow: 0 0 30px rgba(0,245,255,0.6), 0 4px 16px rgba(0,0,0,0.4);
+    transform: translateY(-1px);
+}
+
+.btn-primary:active {
+    transform: translateY(1px);
+    box-shadow: 0 0 12px rgba(0,245,255,0.4);
+}
+
+.btn-secondary {
+    background: rgba(0,245,255,0.06);
+    color: rgba(0,245,255,0.7);
+    border: 1px solid rgba(0,245,255,0.2);
+}
+
+.btn-secondary:hover {
+    background: rgba(0,245,255,0.12);
+    border-color: rgba(0,245,255,0.4);
+    color: #00f5ff;
+}
+
+/* ── Score breakdown ───────────────────────────────────────── */
+.score-breakdown {
+    margin: 20px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.sb-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 16px;
+    background: rgba(0,245,255,0.04);
+    border-radius: 5px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    color: rgba(0,245,255,0.6);
+}
+
+.sb-row span:last-child {
+    font-family: 'Orbitron', monospace;
+    color: #00f5ff;
+    font-size: 14px;
+}
+
+.sb-row.highlight {
+    border: 1px solid rgba(255,230,0,0.2);
+    background: rgba(255,230,0,0.04);
+}
+
+.sb-row.highlight span:last-child {
+    color: #ffe600;
+    text-shadow: 0 0 8px rgba(255,230,0,0.5);
+}
+
+/* ── Level badge ───────────────────────────────────────────── */
+.level-badge {
+    font-family: 'Orbitron', monospace;
+    font-size: 20px;
+    font-weight: 700;
+    color: #00f5ff;
+    text-shadow: 0 0 16px rgba(0,245,255,0.6);
+    letter-spacing: 3px;
+    margin-bottom: 4px;
+}
+
+/* ── Game over ─────────────────────────────────────────────── */
+.gameover-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 34px;
+    font-weight: 900;
+    color: #ff3366;
+    text-shadow: 0 0 20px rgba(255,51,102,0.8), 0 0 50px rgba(255,51,102,0.4);
+    letter-spacing: 4px;
+    animation: flickerRed 1.2s ease-in-out infinite;
+}
+
+@keyframes flickerRed {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.82; }
+    70%       { opacity: 1; }
+    80%       { opacity: 0.75; }
+}
+
+.gameover-sub {
+    font-size: 12px;
+    letter-spacing: 4px;
+    color: rgba(255,51,102,0.5);
+    margin-top: 4px;
+    margin-bottom: 8px;
+}
+
+.go-buttons {
+    display: flex;
+    gap: 12px;
+    margin-top: 4px;
+}
+
+.go-buttons .btn-primary,
+.go-buttons .btn-secondary {
+    margin-top: 0;
+    flex: 1;
+}
+
+/* ── Overlay title ─────────────────────────────────────────── */
+.overlay-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 26px;
+    font-weight: 700;
+    color: #00f5ff;
+    letter-spacing: 4px;
+    margin-bottom: 20px;
+    text-shadow: 0 0 14px rgba(0,245,255,0.6);
+}
+
+/* ── OVERDRIVE notification ────────────────────────────────── */
+#overdrive-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 150;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+#overdrive-overlay.visible {
+    opacity: 1;
+    animation: overdrivePop 3s forwards;
+}
+
+@keyframes overdrivePop {
+    0%   { opacity: 0; transform: scale(0.85); }
+    10%  { opacity: 1; transform: scale(1.04); }
+    20%  { transform: scale(1.0); }
+    75%  { opacity: 1; }
+    100% { opacity: 0; }
+}
+
+.overdrive-content {
+    background: rgba(4,10,28,0.95);
+    border: 2px solid #ffe600;
+    border-radius: 10px;
+    padding: 20px 36px;
+    text-align: center;
+    box-shadow:
+        0 0 30px rgba(255,230,0,0.4),
+        0 0 60px rgba(255,230,0,0.15),
+        inset 0 0 20px rgba(255,230,0,0.04);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+
+.od-icon {
+    font-size: 26px;
+    animation: odIconPulse 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes odIconPulse {
+    from { transform: scale(1);    filter: brightness(1); }
+    to   { transform: scale(1.15); filter: brightness(1.5); }
+}
+
+.od-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 22px;
+    font-weight: 900;
+    color: #ffe600;
+    letter-spacing: 4px;
+    text-shadow: 0 0 20px rgba(255,230,0,0.8);
+}
+
+.od-effects {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    color: rgba(255,230,0,0.75);
+    line-height: 1.8;
+}
+
+/* ── Touch controls ────────────────────────────────────────── */
+#touch-controls {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 180px;
+    display: none; /* shown by JS on touch devices */
+    align-items: flex-end;
+    justify-content: space-between;
+    padding: 0 24px 24px;
+    pointer-events: none;
+    z-index: 50;
+}
+
+#joystick-zone {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background: rgba(0,245,255,0.04);
+    border: 1px solid rgba(0,245,255,0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: all;
+    touch-action: none;
+}
+
+#joystick-base {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+}
+
+#joystick-knob {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 48px; height: 48px;
+    background: radial-gradient(circle, rgba(0,245,255,0.6), rgba(0,200,255,0.2));
+    border: 2px solid rgba(0,245,255,0.5);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    transition: transform 0.05s ease;
+    box-shadow: 0 0 14px rgba(0,245,255,0.4);
+}
+
+#boost-btn {
+    width: 88px;
+    height: 88px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(0,245,255,0.18), rgba(0,100,200,0.1));
+    border: 2px solid rgba(0,245,255,0.4);
+    color: #00f5ff;
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    pointer-events: all;
+    touch-action: none;
+    box-shadow: 0 0 20px rgba(0,245,255,0.2);
+    transition: background 0.1s, box-shadow 0.1s;
+}
+
+#boost-btn span { font-size: 22px; }
+
+#boost-btn:active {
+    background: radial-gradient(circle, rgba(0,245,255,0.35), rgba(0,200,255,0.2));
+    box-shadow: 0 0 30px rgba(0,245,255,0.5);
+}
+
+/* ── Responsive ────────────────────────────────────────────── */
+@media (max-width: 600px) {
+    .overlay-content {
+        padding: 28px 24px;
+    }
+    .logo-line-1 { font-size: 36px; letter-spacing: 5px; }
+    .logo-line-2 { font-size: 28px; letter-spacing: 4px; }
+}
