@@ -34,7 +34,7 @@ NeonDelivery.Renderer = (function () {
 
     // ── Pre-render world ─────────────────────────────────────
     function prerenderWorld(world) {
-        worldRef = world;   // save for damageAt()
+        worldRef = world;
         const wc = worldCtx;
         wc.clearRect(0, 0, WS, WS);
 
@@ -42,12 +42,36 @@ NeonDelivery.Renderer = (function () {
         wc.fillStyle = C.COLOR.BG;
         wc.fillRect(0, 0, WS, WS);
 
-        // Tiles
+        // 1. Base road/grass/building tile colors
+        drawBaseTiles(wc, world);
+
+        // 2. Grass texture
+        drawGrassTexture(wc, world);
+
+        // 3. Asphalt grain
+        drawAsphaltTexture(wc, world);
+
+        // 4. Curbs
+        drawCurbs(wc);
+
+        // 5. Road edge + lane markings
+        drawRoadMarkings(wc);
+
+        // 6. Buildings
+        for (const building of world.buildingRecs) {
+            drawBuilding(wc, building);
+        }
+
+        worldDirty = false;
+    }
+
+    function drawBaseTiles(wc, world) {
+        const TS = C.TILE_SIZE;
         for (let ty = 0; ty < C.WORLD_TILES; ty++) {
             for (let tx = 0; tx < C.WORLD_TILES; tx++) {
-                const tile = world.getTileAt(tx * TS + 1, ty * TS + 1);
-                const px   = tx * TS;
-                const py   = ty * TS;
+                const px = tx * TS;
+                const py = ty * TS;
+                const tile = world.getTileAt(px + 1, py + 1);
 
                 switch (tile) {
                     case TT.ROAD:
@@ -58,171 +82,253 @@ NeonDelivery.Renderer = (function () {
                         wc.fillStyle = C.COLOR.INTERSECTION;
                         wc.fillRect(px, py, TS, TS);
                         break;
+                    case TT.GRASS:
+                        wc.fillStyle = C.COLOR.GRASS;
+                        wc.fillRect(px, py, TS, TS);
+                        break;
+                    case TT.SIDEWALK:
+                        wc.fillStyle = C.COLOR.SIDEWALK;
+                        wc.fillRect(px, py, TS, TS);
+                        break;
                     case TT.ALLEY:
                         wc.fillStyle = C.COLOR.ALLEY;
                         wc.fillRect(px, py, TS, TS);
                         break;
-                    // BUILDING drawn below
+                    case TT.BUILDING:
+                        wc.fillStyle = '#0c121c';
+                        wc.fillRect(px, py, TS, TS);
+                        break;
                 }
             }
         }
-
-        // Road centre dashes
-        drawRoadMarkings(wc, world);
-
-        // Asphalt texture (subtle noise dots, baked once)
-        addAsphaltTexture(wc, world);
-
-        // Buildings
-        for (const b of world.buildingRecs) {
-            drawBuilding(wc, b);
-        }
-
-        worldDirty = false;
     }
 
-    // ── Road markings ────────────────────────────────────────────
-    //  Roads are 3 tiles wide (ROAD_HALF = 1 ⇒ centre-1..centre+1).
-    //  Markings stop at intersections (segmented helpers).
-
-    function drawRoadMarkings(wc, world) {
-        const RC     = C.ROAD_CENTERS;
-        const _TS    = C.TILE_SIZE;
-        const _WS    = C.WORLD_SIZE;
-        const roadW  = C.ROAD_WIDTH_TILES * _TS;   // 3 * 16 = 48 px
-        const halfW  = roadW / 2;                  // 24 px from centre
-
-        wc.save();
-        wc.lineCap = 'round';
-
-        // ── 1. Road edge / kerb lines (light grey) ──────────────────
-        wc.strokeStyle = 'rgba(225,230,235,0.60)';
-        wc.lineWidth   = 2;
-        wc.setLineDash([]);
-        for (const rc of RC) {
-            const centre = rc * _TS + _TS / 2;
-            const edgeA  = centre - halfW;
-            const edgeB  = centre + halfW;
-            // Horizontal road edges
-            wc.beginPath(); wc.moveTo(0, edgeA); wc.lineTo(_WS, edgeA); wc.stroke();
-            wc.beginPath(); wc.moveTo(0, edgeB); wc.lineTo(_WS, edgeB); wc.stroke();
-            // Vertical road edges
-            wc.beginPath(); wc.moveTo(edgeA, 0); wc.lineTo(edgeA, _WS); wc.stroke();
-            wc.beginPath(); wc.moveTo(edgeB, 0); wc.lineTo(edgeB, _WS); wc.stroke();
-        }
-
-        // ── 2. Double yellow centre lines (segmented, skip intersections) ──
-        wc.strokeStyle = '#e8c84a';
-        wc.globalAlpha = 0.90;
-        wc.lineWidth   = 1.5;
-        wc.setLineDash([16, 12]);
-        const yOff = 2.4; // px either side of centre
-        for (const rc of RC) {
-            const centre = rc * _TS + _TS / 2;
-            drawHRoadSegmented(wc, centre - yOff, RC, halfW, _TS, _WS);
-            drawHRoadSegmented(wc, centre + yOff, RC, halfW, _TS, _WS);
-            drawVRoadSegmented(wc, centre - yOff, RC, halfW, _TS, _WS);
-            drawVRoadSegmented(wc, centre + yOff, RC, halfW, _TS, _WS);
-        }
-
-        // ── 3. White lane dividers (segmented, skip intersections) ───────
-        wc.strokeStyle = '#e8edf2';
-        wc.globalAlpha = 0.72;
-        wc.lineWidth   = 1.4;
-        wc.setLineDash([12, 14]);
-        const laneOff = halfW * 0.5; // quarter-width offset from centre
-        for (const rc of RC) {
-            const centre = rc * _TS + _TS / 2;
-            drawHRoadSegmented(wc, centre - laneOff, RC, halfW, _TS, _WS);
-            drawHRoadSegmented(wc, centre + laneOff, RC, halfW, _TS, _WS);
-            drawVRoadSegmented(wc, centre - laneOff, RC, halfW, _TS, _WS);
-            drawVRoadSegmented(wc, centre + laneOff, RC, halfW, _TS, _WS);
-        }
-
-        wc.setLineDash([]);
-        wc.globalAlpha = 1;
-        wc.restore();
-    }
-
-    // Draw a horizontal line segment that skips intersections
-    function drawHRoadSegmented(ctx, y, roadCentres, halfW, _TS, worldSize) {
-        let startX = 0;
-        for (const rc of roadCentres) {
-            const ic = rc * _TS + _TS / 2;
-            const left  = ic - halfW;
-            const right = ic + halfW;
-            if (left > startX) {
-                ctx.beginPath(); ctx.moveTo(startX, y); ctx.lineTo(left, y); ctx.stroke();
-            }
-            startX = right;
-        }
-        if (startX < worldSize) {
-            ctx.beginPath(); ctx.moveTo(startX, y); ctx.lineTo(worldSize, y); ctx.stroke();
-        }
-    }
-
-    // Draw a vertical line segment that skips intersections
-    function drawVRoadSegmented(ctx, x, roadCentres, halfW, _TS, worldSize) {
-        let startY = 0;
-        for (const rc of roadCentres) {
-            const ic  = rc * _TS + _TS / 2;
-            const top = ic - halfW;
-            const bot = ic + halfW;
-            if (top > startY) {
-                ctx.beginPath(); ctx.moveTo(x, startY); ctx.lineTo(x, top); ctx.stroke();
-            }
-            startY = bot;
-        }
-        if (startY < worldSize) {
-            ctx.beginPath(); ctx.moveTo(x, startY); ctx.lineTo(x, worldSize); ctx.stroke();
-        }
-    }
-
-    // ── Asphalt texture ───────────────────────────────────────────
-    //  Subtle deterministic noise dots baked once into the world canvas.
-    function addAsphaltTexture(wc, world) {
-        const _TS = C.TILE_SIZE;
+    function drawGrassTexture(wc, world) {
+        const TS = C.TILE_SIZE;
         wc.save();
         for (let ty = 0; ty < C.WORLD_TILES; ty++) {
             for (let tx = 0; tx < C.WORLD_TILES; tx++) {
-                const tile = world.getTileAt(tx * _TS + 1, ty * _TS + 1);
-                if (tile !== TT.ROAD && tile !== TT.INTERSECTION) continue;
-                const wx = tx * _TS, wy = ty * _TS;
-                for (let i = 0; i < 4; i++) {
+                const px = tx * TS;
+                const py = ty * TS;
+                const tile = world.getTileAt(px + 1, py + 1);
+
+                if (tile !== TT.GRASS) continue;
+
+                // deterministic-looking texture
+                for (let i = 0; i < 7; i++) {
                     const seed = (tx * 374761393 + ty * 668265263 + i * 1274126177) >>> 0;
                     const rx = ((seed ^ (seed >>> 16)) * 0x45d9f3b >>> 0) / 0xffffffff;
                     const ry = ((seed ^ (seed >>> 13)) * 0xb78e3b5d >>> 0) / 0xffffffff;
-                    wc.fillStyle = (i % 2 === 0)
-                        ? 'rgba(255,255,255,0.025)'
-                        : 'rgba(0,0,0,0.045)';
-                    wc.fillRect(wx + rx * _TS, wy + ry * _TS, 1, 1);
+
+                    if (i % 3 === 0) {
+                        wc.fillStyle = 'rgba(150,200,70,0.12)';
+                    } else {
+                        wc.fillStyle = 'rgba(15,50,10,0.16)';
+                    }
+                    wc.fillRect(px + rx * TS, py + ry * TS, 1, 2 + ry * 2);
                 }
             }
         }
         wc.restore();
     }
 
+    function drawAsphaltTexture(wc, world) {
+        const TS = C.TILE_SIZE;
+        for (let ty = 0; ty < C.WORLD_TILES; ty++) {
+            for (let tx = 0; tx < C.WORLD_TILES; tx++) {
+                const px = tx * TS;
+                const py = ty * TS;
+                const tile = world.getTileAt(px + 1, py + 1);
+
+                if (tile !== TT.ROAD && tile !== TT.INTERSECTION) continue;
+
+                for (let i = 0; i < 5; i++) {
+                    const seed = (tx * 123456789 + ty * 987654321 + i * 555555555) >>> 0;
+                    const rx = ((seed ^ (seed >>> 16)) * 0x45d9f3b >>> 0) / 0xffffffff;
+                    const ry = ((seed ^ (seed >>> 13)) * 0xb78e3b5d >>> 0) / 0xffffffff;
+
+                    wc.fillStyle = (i % 2 === 0) ? 'rgba(255,255,255,0.025)' : 'rgba(0,0,0,0.07)';
+                    wc.fillRect(px + rx * TS, py + ry * TS, 1, 1);
+                }
+            }
+        }
+    }
+
+    function drawCurbs(wc) {
+        const RC = C.ROAD_CENTERS;
+        const TS = C.TILE_SIZE;
+        const _WS = C.WORLD_SIZE;
+        const HALF = C.ROAD_HALF_TILES * TS;
+
+        wc.save();
+
+        // dark curb shadow
+        wc.strokeStyle = 'rgba(0,0,0,0.45)';
+        wc.lineWidth = 6;
+        for (const rc of RC) {
+            const c = rc * TS + TS / 2;
+            wc.beginPath(); wc.moveTo(0, c - HALF - 2); wc.lineTo(_WS, c - HALF - 2); wc.stroke();
+            wc.beginPath(); wc.moveTo(0, c + HALF + 2); wc.lineTo(_WS, c + HALF + 2); wc.stroke();
+            wc.beginPath(); wc.moveTo(c - HALF - 2, 0); wc.lineTo(c - HALF - 2, _WS); wc.stroke();
+            wc.beginPath(); wc.moveTo(c + HALF + 2, 0); wc.lineTo(c + HALF + 2, _WS); wc.stroke();
+        }
+
+        // bright curb edge
+        wc.strokeStyle = 'rgba(215,220,220,0.78)';
+        wc.lineWidth = 2;
+        for (const rc of RC) {
+            const c = rc * TS + TS / 2;
+            wc.beginPath(); wc.moveTo(0, c - HALF); wc.lineTo(_WS, c - HALF); wc.stroke();
+            wc.beginPath(); wc.moveTo(0, c + HALF); wc.lineTo(_WS, c + HALF); wc.stroke();
+            wc.beginPath(); wc.moveTo(c - HALF, 0); wc.lineTo(c - HALF, _WS); wc.stroke();
+            wc.beginPath(); wc.moveTo(c + HALF, 0); wc.lineTo(c + HALF, _WS); wc.stroke();
+        }
+        wc.restore();
+    }
+
+    function drawRoadMarkings(wc) {
+        const RC = C.ROAD_CENTERS;
+        const TS = C.TILE_SIZE;
+        const _WS = C.WORLD_SIZE;
+        const HALF = C.ROAD_HALF_TILES * TS;
+
+        wc.save();
+        wc.lineCap = 'butt';
+
+        // ==========================================
+        // BRIGHT WHITE ROAD BOUNDARIES
+        // ==========================================
+        wc.strokeStyle = '#e4e6e3';
+        wc.lineWidth = 3;
+        wc.globalAlpha = 0.90;
+        wc.setLineDash([]);
+
+        for (const rc of RC) {
+            const center = rc * TS + TS / 2;
+
+            wc.beginPath(); wc.moveTo(0, center - HALF); wc.lineTo(_WS, center - HALF); wc.stroke();
+            wc.beginPath(); wc.moveTo(0, center + HALF); wc.lineTo(_WS, center + HALF); wc.stroke();
+            wc.beginPath(); wc.moveTo(center - HALF, 0); wc.lineTo(center - HALF, _WS); wc.stroke();
+            wc.beginPath(); wc.moveTo(center + HALF, 0); wc.lineTo(center + HALF, _WS); wc.stroke();
+        }
+
+        // ==========================================
+        // CENTER DASHES
+        // ==========================================
+        wc.strokeStyle = '#f4f4f2';
+        wc.lineWidth = 3;
+        wc.globalAlpha = 0.95;
+        wc.setLineDash([20, 19]);
+
+        for (const rc of RC) {
+            const center = rc * TS + TS / 2;
+            drawHorizontalCenterLine(wc, center, RC, HALF, TS, _WS);
+            drawVerticalCenterLine(wc, center, RC, HALF, TS, _WS);
+        }
+        wc.restore();
+    }
+
+    function drawHorizontalCenterLine(ctx, y, roads, half, TS, WS) {
+        let x1 = 0;
+        for (const road of roads) {
+            const cx = road * TS + TS / 2;
+            const left = cx - half;
+            const right = cx + half;
+            if (left > x1) {
+                ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(left, y); ctx.stroke();
+            }
+            x1 = right;
+        }
+        if (x1 < WS) {
+            ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(WS, y); ctx.stroke();
+        }
+    }
+
+    function drawVerticalCenterLine(ctx, x, roads, half, TS, WS) {
+        let y1 = 0;
+        for (const road of roads) {
+            const cy = road * TS + TS / 2;
+            const top = cy - half;
+            const bottom = cy + half;
+            if (top > y1) {
+                ctx.beginPath(); ctx.moveTo(x, y1); ctx.lineTo(x, top); ctx.stroke();
+            }
+            y1 = bottom;
+        }
+        if (y1 < WS) {
+            ctx.beginPath(); ctx.moveTo(x, y1); ctx.lineTo(x, WS); ctx.stroke();
+        }
+    }
+
     function drawBuilding(wc, b) {
-        // Base fill
-        wc.fillStyle = C.COLOR.BUILDING[b.colorIdx];
+        const base = C.COLOR.BUILDING[b.colorIdx];
+
+        // BUILDING SHADOW
+        wc.fillStyle = 'rgba(0,0,0,0.50)';
+        wc.fillRect(b.x + 5, b.y + 6, b.w, b.h);
+
+        // BUILDING EXTERIOR
+        wc.fillStyle = '#060c15';
         wc.fillRect(b.x, b.y, b.w, b.h);
 
-        // Subtle top-edge highlight (neon ledge)
-        wc.fillStyle = 'rgba(0,200,255,0.07)';
-        wc.fillRect(b.x, b.y, b.w, 2);
-        wc.fillStyle = 'rgba(0,200,255,0.04)';
-        wc.fillRect(b.x, b.y, 2, b.h);
+        // border
+        wc.strokeStyle = '#172538';
+        wc.lineWidth = 3;
+        wc.strokeRect(b.x + 2, b.y + 2, b.w - 4, b.h - 4);
 
-        // Windows — no shadow blur on these for performance
+        // ROOF INSET
+        const inset = 8;
+        wc.fillStyle = base;
+        wc.fillRect(b.x + inset, b.y + inset, b.w - inset * 2, b.h - inset * 2);
+
+        // INNER ROOF BORDER
+        wc.strokeStyle = 'rgba(20,60,90,0.30)';
+        wc.lineWidth = 2;
+        wc.strokeRect(b.x + inset + 3, b.y + inset + 3, b.w - inset * 2 - 6, b.h - inset * 2 - 6);
+        
+        // ROOF PROPS (vents/AC)
+        for (const p of b.roofProps || []) {
+            wc.fillStyle = '#070d16';
+            wc.fillRect(p.x, p.y, p.w, p.h);
+
+            wc.strokeStyle = '#142031';
+            wc.lineWidth = 1;
+            wc.strokeRect(p.x, p.y, p.w, p.h);
+        }
+
+        // WINDOWS
         for (const w of b.windows) {
-            if (w.lit) {
-                if (w.mag)        wc.fillStyle = C.COLOR.WIN_MAGENTA;
-                else if (w.warm)  wc.fillStyle = C.COLOR.WIN_WARM;
-                else              wc.fillStyle = C.COLOR.WIN_CYAN;
+            if (w.destroyed || !w.lit) continue;
+
+            if (w.mag) {
+                wc.shadowColor = '#ff1dcc';
+                wc.fillStyle = '#ff38d1';
+            } else if (w.warm) {
+                wc.shadowColor = '#ffc52f';
+                wc.fillStyle = '#ffc83d';
             } else {
-                wc.fillStyle = C.COLOR.WIN_OFF;
+                wc.shadowColor = '#00f2ff';
+                wc.fillStyle = '#00eaff';
             }
+
+            wc.shadowBlur = 5;
             wc.fillRect(w.x, w.y, 5, 5);
+            wc.shadowBlur = 0;
+        }
+
+        // NEON TRIM
+        if (b.neon) {
+            wc.save();
+            wc.shadowBlur = 12;
+            wc.shadowColor = b.neonColor;
+            wc.strokeStyle = b.neonColor;
+            wc.lineWidth = 3;
+
+            wc.beginPath();
+            wc.moveTo(b.x + 10, b.y + 7);
+            wc.lineTo(b.x + b.w - 10, b.y + 7);
+            wc.stroke();
+            wc.restore();
         }
     }
 
@@ -1256,9 +1362,13 @@ NeonDelivery.Renderer = (function () {
                 const dy = (w.y + 2.5) - wy;
                 if (dx * dx + dy * dy > r2) continue;
 
-                // Erase window — paint building base colour over it
+                // Erase window and its glow
+                worldCtx.save();
+                worldCtx.shadowBlur = 0;
                 worldCtx.fillStyle = C.COLOR.BUILDING[b.colorIdx];
-                worldCtx.fillRect(w.x, w.y, 5, 5);
+                worldCtx.fillRect(w.x - 2, w.y - 2, 9, 9);
+                worldCtx.restore();
+
                 w.lit       = false;
                 w.destroyed = true;
                 hit = true;

@@ -31,11 +31,12 @@ NeonDelivery.World = (function () {
             tiles[tileIdx(tx, ty)] = type;
     }
 
-    function onHRoad(ty) {
-        return RC.some(rc => ty >= rc - RH && ty <= rc + RH);
-    }
-    function onVRoad(tx) {
-        return RC.some(rc => tx >= rc - RH && tx <= rc + RH);
+    function distToNearestRoadCenter(tileCoord) {
+        let best = Infinity;
+        for (const center of RC) {
+            best = Math.min(best, Math.abs(tileCoord - center));
+        }
+        return best;
     }
 
     // ── Generate ─────────────────────────────────────────────
@@ -46,38 +47,63 @@ NeonDelivery.World = (function () {
         spawnPoints  = [];
         carLanes     = [];
 
-        // 1. Roads & intersections
+        const roadHalf = C.ROAD_HALF_TILES;
+        const grass    = C.GRASS_TILES;
+        const sidewalk = C.SIDEWALK_TILES;
+
         for (let ty = 0; ty < WT; ty++) {
             for (let tx = 0; tx < WT; tx++) {
-                const h = onHRoad(ty);
-                const v = onVRoad(tx);
-                if      (h && v) setTile(tx, ty, TT.INTERSECTION);
-                else if (h || v) setTile(tx, ty, TT.ROAD);
-                else             setTile(tx, ty, TT.BUILDING);
+
+                const dx = distToNearestRoadCenter(tx);
+                const dy = distToNearestRoadCenter(ty);
+
+                const onVerticalRoad   = dx <= roadHalf;
+                const onHorizontalRoad = dy <= roadHalf;
+
+                // ==============================
+                // ROAD / INTERSECTION
+                // ==============================
+                if (onVerticalRoad && onHorizontalRoad) {
+                    setTile(tx, ty, TT.INTERSECTION);
+                    continue;
+                }
+                if (onVerticalRoad || onHorizontalRoad) {
+                    setTile(tx, ty, TT.ROAD);
+                    continue;
+                }
+
+                // ==============================
+                // GRASS VERGE
+                // ==============================
+                const grassLimit = roadHalf + grass;
+                if (dx <= grassLimit || dy <= grassLimit) {
+                    setTile(tx, ty, TT.GRASS);
+                    continue;
+                }
+
+                // ==============================
+                // SIDEWALK / BUILDING SETBACK
+                // ==============================
+                const sidewalkLimit = grassLimit + sidewalk;
+                if (dx <= sidewalkLimit || dy <= sidewalkLimit) {
+                    setTile(tx, ty, TT.SIDEWALK);
+                    continue;
+                }
+
+                // ==============================
+                // BUILDINGS
+                // ==============================
+                setTile(tx, ty, TT.BUILDING);
             }
         }
 
-        // 2. Block boundaries
-        //    blockStarts / blockEnds for x and y (same, world is square)
-        const blockEdges = computeBlockEdges();
+        // Subdivide blocks with internal alleys
+        generateAlleys(level);
 
-        // 3. Subdivide each block
-        const alleyChance = Math.min(0.18 + level * 0.04, 0.35);
-        for (let bx = 0; bx < blockEdges.starts.length; bx++) {
-            for (let by = 0; by < blockEdges.starts.length; by++) {
-                const x1 = blockEdges.starts[bx];
-                const x2 = blockEdges.ends[bx];
-                const y1 = blockEdges.starts[by];
-                const y2 = blockEdges.ends[by];
-                if (x1 > x2 || y1 > y2) continue;
-                fillBlock(x1, y1, x2, y2, alleyChance, level);
-            }
-        }
+        // Group TT.BUILDING tiles into logical building rectangles
+        recordBuildings(level);
 
-        // 4. Spawn points (road-centre pixels, away from intersections)
         buildSpawnPoints();
-
-        // 5. Car lanes
         buildCarLanes();
 
         return {
@@ -88,69 +114,40 @@ NeonDelivery.World = (function () {
         };
     }
 
-    // ── Block edge calculator ────────────────────────────────
+    // ── Alleys ───────────────────────────────────────────────
 
-    function computeBlockEdges() {
-        const starts = [];
-        const ends   = [];
-
-        // First block: from tile 0 to first road - 2 (leaving 1-tile alley margin)
-        let cursor = 0;
-        starts.push(cursor);
-        ends.push(RC[0] - RH - 1);
-
-        for (let i = 0; i < RC.length - 1; i++) {
-            cursor = RC[i] + RH + 1;
-            starts.push(cursor);
-            ends.push(RC[i + 1] - RH - 1);
-        }
-
-        // Last block
-        cursor = RC[RC.length - 1] + RH + 1;
-        starts.push(cursor);
-        ends.push(WT - 1);
-
-        return { starts, ends };
-    }
-
-    // ── Block filler ─────────────────────────────────────────
-
-    function fillBlock(x1, y1, x2, y2, alleyChance, level) {
-        const bw = x2 - x1 + 1;
-        const bh = y2 - y1 + 1;
-        if (bw < 1 || bh < 1) return;
-
-        // Border rows/cols become alleys (allow drone to hug the wall of roads)
-        for (let ty = y1; ty <= y2; ty++) {
-            for (let tx = x1; tx <= x2; tx++) {
-                const edge = (tx === x1 || tx === x2 || ty === y1 || ty === y2);
-                setTile(tx, ty, edge ? TT.ALLEY : TT.BUILDING);
+    function generateAlleys(level) {
+        const alleyChance = Math.min(0.18 + level * 0.04, 0.35);
+        
+        // Very simple internal alley generation:
+        // just randomly cut vertical and horizontal lines of TT.ALLEY through TT.BUILDING areas
+        for (let ty = 0; ty < WT; ty++) {
+            if (tiles[tileIdx(0, ty)] === TT.BUILDING || tiles[tileIdx(WT/2, ty)] === TT.BUILDING) {
+                if (Math.random() < alleyChance * 0.2) {
+                    for (let tx = 0; tx < WT; tx++) {
+                        if (tiles[tileIdx(tx, ty)] === TT.BUILDING) setTile(tx, ty, TT.ALLEY);
+                    }
+                }
             }
         }
-
-        // Optional internal horizontal alley
-        if (bh > 4 && Math.random() < alleyChance) {
-            const ay = y1 + 1 + Math.floor(Math.random() * (bh - 2));
-            for (let tx = x1; tx <= x2; tx++) setTile(tx, ay, TT.ALLEY);
+        for (let tx = 0; tx < WT; tx++) {
+            if (tiles[tileIdx(tx, 0)] === TT.BUILDING || tiles[tileIdx(tx, WT/2)] === TT.BUILDING) {
+                if (Math.random() < alleyChance * 0.2) {
+                    for (let ty = 0; ty < WT; ty++) {
+                        if (tiles[tileIdx(tx, ty)] === TT.BUILDING) setTile(tx, ty, TT.ALLEY);
+                    }
+                }
+            }
         }
-
-        // Optional internal vertical alley
-        if (bw > 4 && Math.random() < alleyChance) {
-            const ax = x1 + 1 + Math.floor(Math.random() * (bw - 2));
-            for (let ty = y1; ty <= y2; ty++) setTile(ax, ty, TT.ALLEY);
-        }
-
-        // Record building rects (scan connected BUILDING regions)
-        recordBuildings(x1, y1, x2, y2, level);
     }
 
     // ── Building recorder ────────────────────────────────────
 
-    function recordBuildings(x1, y1, x2, y2, level) {
+    function recordBuildings(level) {
         const visited = new Uint8Array(WT * WT);
 
-        for (let ty = y1; ty <= y2; ty++) {
-            for (let tx = x1; tx <= x2; tx++) {
+        for (let ty = 0; ty < WT; ty++) {
+            for (let tx = 0; tx < WT; tx++) {
                 const idx = tileIdx(tx, ty);
                 if (tiles[idx] !== TT.BUILDING || visited[idx]) continue;
 
@@ -158,11 +155,11 @@ NeonDelivery.World = (function () {
                 let rx2 = tx, ry2 = ty;
 
                 // Expand right
-                while (rx2 + 1 <= x2 && tiles[tileIdx(rx2 + 1, ty)] === TT.BUILDING && !visited[tileIdx(rx2 + 1, ty)])
+                while (rx2 + 1 < WT && tiles[tileIdx(rx2 + 1, ty)] === TT.BUILDING && !visited[tileIdx(rx2 + 1, ty)])
                     rx2++;
 
                 // Expand down
-                expand: while (ry2 + 1 <= y2) {
+                expand: while (ry2 + 1 < WT) {
                     for (let cx = tx; cx <= rx2; cx++) {
                         if (tiles[tileIdx(cx, ry2 + 1)] !== TT.BUILDING) break expand;
                     }
@@ -184,10 +181,28 @@ NeonDelivery.World = (function () {
                 buildingRecs.push({
                     x: bx, y: by, w: bw, h: bh,
                     colorIdx,
-                    windows: buildWindows(bx, by, bw, bh, level)
+                    neon: Math.random() < 0.22,
+                    neonColor: Math.random() < 0.5 ? '#ff28d7' : '#00edff',
+                    windows: buildWindows(bx, by, bw, bh, level),
+                    roofProps: buildRoofProps(bx, by, bw, bh)
                 });
             }
         }
+    }
+
+    function buildRoofProps(bx, by, bw, bh) {
+        const props = [];
+        const count = Math.floor(Math.random() * 4);
+        for (let i = 0; i < count; i++) {
+            const w = 8 + Math.floor(Math.random() * 16);
+            const h = 8 + Math.floor(Math.random() * 16);
+            props.push({
+                x: bx + 12 + Math.random() * Math.max(1, bw - w - 24),
+                y: by + 12 + Math.random() * Math.max(1, bh - h - 24),
+                w, h
+            });
+        }
+        return props;
     }
 
     // ── Window generator ─────────────────────────────────────
@@ -221,21 +236,19 @@ NeonDelivery.World = (function () {
         spawnPoints = [];
         const step = 5;
 
-        // Along horizontal road centres
         for (const rc of RC) {
             const py = (rc * TS) + Math.floor(TS / 2);
             for (let tx = 0; tx < WT; tx += step) {
-                if (!onVRoad(tx)) {
+                if (distToNearestRoadCenter(tx) > C.ROAD_HALF_TILES) {
                     spawnPoints.push({ x: tx * TS + TS / 2, y: py });
                 }
             }
         }
 
-        // Along vertical road centres
         for (const rc of RC) {
             const px = (rc * TS) + Math.floor(TS / 2);
             for (let ty = 0; ty < WT; ty += step) {
-                if (!onHRoad(ty)) {
+                if (distToNearestRoadCenter(ty) > C.ROAD_HALF_TILES) {
                     spawnPoints.push({ x: px, y: ty * TS + TS / 2 });
                 }
             }
@@ -249,14 +262,14 @@ NeonDelivery.World = (function () {
 
         // Horizontal road -> two traffic lanes
         for (const rc of RC) {
-            carLanes.push({ axis: 'h', y: (rc - 1) * TS + TS * 0.5, dir:  1 }); // top lane → right
-            carLanes.push({ axis: 'h', y: (rc + 1) * TS + TS * 0.5, dir: -1 }); // bottom lane ← left
+            carLanes.push({ axis: 'h', y: (rc - 1.5) * TS + TS * 0.5, dir:  1 }); // top lane → right
+            carLanes.push({ axis: 'h', y: (rc + 1.5) * TS + TS * 0.5, dir: -1 }); // bottom lane ← left
         }
 
         // Vertical road -> two traffic lanes
         for (const rc of RC) {
-            carLanes.push({ axis: 'v', x: (rc - 1) * TS + TS * 0.5, dir:  1 }); // left lane ↓ down
-            carLanes.push({ axis: 'v', x: (rc + 1) * TS + TS * 0.5, dir: -1 }); // right lane ↑ up
+            carLanes.push({ axis: 'v', x: (rc - 1.5) * TS + TS * 0.5, dir:  1 }); // left lane ↓ down
+            carLanes.push({ axis: 'v', x: (rc + 1.5) * TS + TS * 0.5, dir: -1 }); // right lane ↑ up
         }
     }
 

@@ -10,17 +10,18 @@ NeonDelivery.Config = {
     CANVAS_H: 640,
 
     // ── World ───────────────────────────────────────────────
-    TILE_SIZE: 32,
-    WORLD_TILES: 60,
+    TILE_SIZE: 16,
+    WORLD_TILES: 120,
     get WORLD_SIZE() { return this.TILE_SIZE * this.WORLD_TILES; }, // 1920
 
-    // Road centers (tile index).  Each road = center ±1 tile (3 tiles wide).
-    ROAD_CENTERS: [7, 18, 29, 40, 51],
-    ROAD_HALF: 1,
-    ROAD_WIDTH_TILES: 3,   // centre-1 to centre+1 = 3 tiles wide (matches world.js)
+    // Road centers (tile index).
+    ROAD_CENTERS: [14, 36, 58, 80, 102],
+    ROAD_HALF_TILES: 3,       // road offset from center
+    GRASS_TILES: 2,           // grass strip
+    SIDEWALK_TILES: 1,        // sidewalk strip
 
     // ── Tile types ──────────────────────────────────────────
-    TILE: { ROAD: 0, BUILDING: 1, ALLEY: 2, INTERSECTION: 3 },
+    TILE: { EMPTY: 0, ROAD: 1, INTERSECTION: 2, GRASS: 3, SIDEWALK: 4, BUILDING: 5, ALLEY: 6 },
 
     // ── Drone physics ───────────────────────────────────────
     DRONE_RADIUS: 10,
@@ -126,10 +127,12 @@ NeonDelivery.Config = {
     // ── Neon colour palette ──────────────────────────────────
     COLOR: {
         BG:           '#020810',
-        ROAD:         '#30343c',
+        ROAD:         '#161c25',
         ROAD_LINE:    '#edf1f4',
-        INTERSECTION: '#343942',
-        ALLEY:        '#171a20',
+        INTERSECTION: '#18202a',
+        GRASS:        '#315b18',
+        SIDEWALK:     '#202833',
+        ALLEY:        '#10151d',
         BUILDING: [
             '#0c1428', '#0d1830', '#0a1222',
             '#111535', '#0e1628', '#0b1325'
