@@ -96,7 +96,10 @@ NeonDelivery.Entities = (function () {
         for (let i = 0; i < count; i++) {
             const lane = lanes[i % lanes.length];
             const WS   = C.WORLD_SIZE;
-            const spd  = C.CAR_SPEED_MIN + Math.random() * (C.CAR_SPEED_MAX - C.CAR_SPEED_MIN);
+            
+            // Speed in pixels per second
+            const spdMag = 35 + Math.random() * 25;
+            const spd = spdMag * lane.dir;
             const colorIdx = Math.floor(Math.random() * C.COLOR.CAR.length);
 
             if (lane.axis === 'h') {
@@ -105,12 +108,11 @@ NeonDelivery.Entities = (function () {
                     axis: 'h',
                     x: startX,
                     y: lane.y,
-                    spd: spd * lane.dir,
+                    spd: spd,
                     w:   C.CAR_W,
                     h:   C.CAR_H,
                     colorIdx,
-                    respawnTimer: 0,   // ms until reappear (0 = active)
-                    lane                // keep lane ref for respawn
+                    lane: lane.y
                 });
             } else {
                 const startY = Math.random() * WS;
@@ -118,12 +120,11 @@ NeonDelivery.Entities = (function () {
                     axis: 'v',
                     x: lane.x,
                     y: startY,
-                    spd: spd * lane.dir,
+                    spd: spd,
                     w:   C.CAR_H,   // rotated: thinner dimension along x
                     h:   C.CAR_W,
                     colorIdx,
-                    respawnTimer: 0,
-                    lane
+                    lane: lane.x
                 });
             }
         }
@@ -163,47 +164,46 @@ NeonDelivery.Entities = (function () {
 
     // ── Cars ─────────────────────────────────────────────────
 
-    function respawnCar(car) {
-        const WS = C.WORLD_SIZE;
-        // Pick a fresh random entry position at the opposite edge
-        if (car.axis === 'h') {
-            car.x = car.spd > 0 ? -60 : WS + 60;
-            // Randomise y within same lane band
-            car.y = car.lane ? car.lane.y : car.y;
-        } else {
-            car.y = car.spd > 0 ? -60 : WS + 60;
-            car.x = car.lane ? car.lane.x : car.x;
-        }
-        car.respawnTimer = 0;
-    }
-
     function updateCars(dt, drone) {
         const WS = C.WORLD_SIZE;
         const DR = C.DRONE_RADIUS + 10;
-        const RESPAWN_MS = 3000;
+        const MARGIN = 45;
+        const dtSec = dt / 1000;
 
         for (const car of cars) {
 
-            // Waiting to respawn
-            if (car.respawnTimer > 0) {
-                car.respawnTimer -= dt;
-                if (car.respawnTimer <= 0) respawnCar(car);
-                continue;   // skip movement & collision while off-screen
-            }
-
             // Move
             if (car.axis === 'h') {
-                car.x += car.spd;
-                // Exited world — start respawn timer
-                if (car.x > WS + 50 || car.x < -50) {
-                    car.respawnTimer = RESPAWN_MS;
-                    continue;
+                // Always remain on horizontal lane
+                car.y = car.lane;
+                car.x += car.spd * dtSec;
+
+                if (car.spd > 0) {
+                    if (car.x > WS + MARGIN) {
+                        car.x = -MARGIN;
+                        car.spd = 35 + Math.random() * 25;
+                    }
+                } else {
+                    if (car.x < -MARGIN) {
+                        car.x = WS + MARGIN;
+                        car.spd = -(35 + Math.random() * 25);
+                    }
                 }
             } else {
-                car.y += car.spd;
-                if (car.y > WS + 50 || car.y < -50) {
-                    car.respawnTimer = RESPAWN_MS;
-                    continue;
+                // Always remain on vertical lane
+                car.x = car.lane;
+                car.y += car.spd * dtSec;
+
+                if (car.spd > 0) {
+                    if (car.y > WS + MARGIN) {
+                        car.y = -MARGIN;
+                        car.spd = 35 + Math.random() * 25;
+                    }
+                } else {
+                    if (car.y < -MARGIN) {
+                        car.y = WS + MARGIN;
+                        car.spd = -(35 + Math.random() * 25);
+                    }
                 }
             }
 
