@@ -12,7 +12,7 @@ NeonDelivery.Drone = (function () {
     let vx = 0, vy = 0;   // velocity (px/frame)
     let angle = 0;         // visual heading (radians)
 
-    // Boost
+    // Normal boost
     let boostSpeedMult  = C.BOOST_SPEED_MULT;
     let boostDuration   = C.BOOST_DURATION;
     let boostCooldown   = C.BOOST_COOLDOWN;
@@ -20,11 +20,27 @@ NeonDelivery.Drone = (function () {
     let boostCoolTimer  = 0;   // ms remaining in cooldown
     let boosting        = false;
 
+    // ── DOUBLE-BOOST (DASH) ───────────────────────────────────
+    // Activated by double-tapping Space within DASH_WINDOW ms.
+    // Gives 3× speed for DASH_DURATION ms, then 6s cooldown.
+    const DASH_SPEED_MULT = 3.2;
+    const DASH_DURATION   = 350;   // ms of actual dash
+    const DASH_COOLDOWN   = 6000;  // ms cooldown after dash
+    const DASH_WINDOW     = 450;   // ms between taps to count as double
+    let dashing        = false;
+    let dashTimer      = 0;   // ms remaining in active dash
+    let dashCoolTimer  = 0;   // ms remaining in cooldown
+    let lastBoostPress = -9999; // timestamp of previous Space press
+
     // Shield / damage
     let shieldMax  = 0;
     let shields    = 0;
     let hitFlash   = 0;   // ms of red flash after hit
     let invincible = 0;   // ms of invincibility after hit
+
+    // Spawn protection
+    let spawnProtection = 0;   // ms of full invincibility at game start
+    const SPAWN_PROTECT_MS = 5000;
 
     // Package carrying
     let maxCarry   = 1;
@@ -48,10 +64,17 @@ NeonDelivery.Drone = (function () {
         boostCoolTimer = 0;
         boosting       = false;
 
+        dashing       = false;
+        dashTimer     = 0;
+        dashCoolTimer = 0;
+        lastBoostPress = -9999;
+
         shieldMax  = 0;
         shields    = 0;
         hitFlash   = 0;
         invincible = 0;
+
+        spawnProtection = SPAWN_PROTECT_MS;  // 5s shield on start
 
         maxCarry          = 1;
         carrying          = [];
@@ -80,31 +103,62 @@ NeonDelivery.Drone = (function () {
     // ── Update ───────────────────────────────────────────────
     function update(dt, input, world, eventState) {
         const move = input.getMove();
-        const wantBoost = input.isBoost();
 
-        // ── Boost activation ─────────────────────────────────
-        if (wantBoost && !boosting && boostCoolTimer <= 0) {
+        // Spawn protection countdown
+        if (spawnProtection > 0) spawnProtection -= dt;
+
+        // ── Dash double-tap detection (uses press EDGE, not held state) ──
+        // isBoostPressed() fires ONCE per physical keydown, so gap timing is reliable.
+        const boostPressed = input.isBoostPressed();
+        const now = performance.now();
+
+        if (boostPressed && !dashing) {
+            const gap = now - lastBoostPress;
+            if (gap < DASH_WINDOW && dashCoolTimer <= 0) {
+                // DOUBLE-TAP → DASH
+                dashing        = true;
+                dashTimer      = DASH_DURATION;
+                dashCoolTimer  = DASH_COOLDOWN;
+                // Cancel any active normal boost so dash speed applies cleanly
+                boosting       = false;
+                boostTimer     = 0;
+                lastBoostPress = -9999; // consume
+                NeonDelivery.Audio.overdrive();
+            } else {
+                // First tap → record time (normal boost fires below via isBoost())
+                lastBoostPress = now;
+            }
+        }
+
+        // ── Normal boost activation (sustained hold) ─────────────
+        const wantBoost = input.isBoost();
+        if (wantBoost && !boosting && boostCoolTimer <= 0 && !dashing) {
             boosting       = true;
             boostTimer     = boostDuration;
             boostCoolTimer = boostCooldown;
             NeonDelivery.Audio.boost();
         }
 
+        // Boost tick
         if (boosting) {
             boostTimer -= dt;
-            if (boostTimer <= 0) {
-                boosting   = false;
-                boostTimer = 0;
-            }
+            if (boostTimer <= 0) { boosting = false; boostTimer = 0; }
         }
         if (boostCoolTimer > 0) boostCoolTimer -= dt;
+
+        // Dash tick
+        if (dashing) {
+            dashTimer -= dt;
+            if (dashTimer <= 0) { dashing = false; dashTimer = 0; }
+        }
+        if (dashCoolTimer > 0) dashCoolTimer -= dt;
 
         // ── Timers ───────────────────────────────────────────
         if (hitFlash   > 0) hitFlash   -= dt;
         if (invincible > 0) invincible -= dt;
 
         // ── Acceleration ─────────────────────────────────────
-        const speedMult = boosting ? boostSpeedMult : 1;
+        const speedMult = dashing ? DASH_SPEED_MULT : boosting ? boostSpeedMult : 1;
         const maxSpd    = C.DRONE_MAX_SPEED * speedMult;
 
         vx += move.dx * C.DRONE_ACCEL * speedMult;
@@ -118,60 +172,49 @@ NeonDelivery.Drone = (function () {
 
         // Clamp speed
         const spd = Math.sqrt(vx * vx + vy * vy);
-        if (spd > maxSpd) {
-            vx = vx / spd * maxSpd;
-            vy = vy / spd * maxSpd;
-        }
+        if (spd > maxSpd) { vx = vx / spd * maxSpd; vy = vy / spd * maxSpd; }
 
-        // Friction
-        vx *= C.DRONE_FRICTION;
-        vy *= C.DRONE_FRICTION;
+        // Friction (less friction during dash)
+        const friction = dashing ? 0.94 : C.DRONE_FRICTION;
+        vx *= friction;
+        vy *= friction;
 
         // Heading angle
         if (spd > 0.2) {
             const targetAngle = Math.atan2(vy, vx);
-            const da = angleDiff(targetAngle, angle);
-            angle += da * 0.18;
+            angle += angleDiff(targetAngle, angle) * 0.18;
         }
 
         // ── Move & collide ───────────────────────────────────
         const R  = C.DRONE_RADIUS;
-        const nx = x + vx;
-        const ny = y + vy;
-
+        const nx = x + vx, ny = y + vy;
         const blockedX = world.isBlockedRect(nx, y, R);
         const blockedY = world.isBlockedRect(x, ny, R);
-        const blockedB = blockedX && blockedY;
-
-        // Capture speed BEFORE the bounce mutates vx/vy
         const impactSpd = Math.sqrt(vx * vx + vy * vy);
 
         if (!blockedX) x = nx; else { vx *= -0.35; onCollision(impactSpd); }
         if (!blockedY) y = ny; else { vy *= -0.35; onCollision(impactSpd); }
-        if (blockedB)           { vx = 0; vy = 0; }
-
         // World clamp
         x = Math.max(R, Math.min(WS - R, x));
         y = Math.max(R, Math.min(WS - R, y));
 
-        // Emit boost particles
-        if (boosting && Math.random() < 0.7) {
+        // Particles — dash gets magenta, normal boost gets cyan
+        if (dashing && Math.random() < 0.85) {
+            NeonDelivery.Particles.emit('dash', x, y, 2);
+        } else if (boosting && Math.random() < 0.7) {
             NeonDelivery.Particles.emit('boost', x, y, 1);
         }
     }
 
     // ── Collision with building wall ──────────────────────────
     function onCollision(impactSpd) {
+        // Spawn protection: no damage or pixel erasure during grace period
+        if (spawnProtection > 0) return;
         if (invincible > 0) return;
         cleanRun = false;
 
-        // Damage radius: min 18px at low speed, up to 40px at full boost speed
         const dmgR = Math.min(18 + (impactSpd || 0) * 3.5, 40);
-
-        // Permanently erase window pixels from world canvas
         NeonDelivery.Renderer.damageAt(x, y, dmgR);
-
-        // Shatter particle burst (matches the pixel debris visually)
         NeonDelivery.Particles.emit('shatter', x, y, 16);
         NeonDelivery.Audio.collision();
 
@@ -190,10 +233,11 @@ NeonDelivery.Drone = (function () {
      * Returns true if the drone is destroyed (game over).
      */
     function takeDamage() {
+        // Full immunity during spawn protection
+        if (spawnProtection > 0) return false;
         if (invincible > 0) return false;
         cleanRun = false;
 
-        // Car / police hit — fixed 32px damage radius
         NeonDelivery.Renderer.damageAt(x, y, 32);
         NeonDelivery.Particles.emit('shatter', x, y, 22);
         NeonDelivery.Audio.collision();
@@ -258,6 +302,13 @@ NeonDelivery.Drone = (function () {
         get boostCoolTimer()  { return boostCoolTimer;  },
         get boostCooldown()   { return boostCooldown;   },
         get boostDuration()   { return boostDuration;   },
+        get dashing()         { return dashing;         },
+        get dashTimer()       { return dashTimer;       },
+        get dashCoolTimer()   { return dashCoolTimer;   },
+        get dashCooldown()    { return DASH_COOLDOWN;   },
+        get dashDuration()    { return DASH_DURATION;   },
+        get spawnProtection() { return spawnProtection; },
+        get spawnProtectMax() { return SPAWN_PROTECT_MS;},
         get hitFlash()        { return hitFlash;        },
         get shields()         { return shields;         },
         get shieldMax()       { return shieldMax;       },

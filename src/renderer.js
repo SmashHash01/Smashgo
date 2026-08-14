@@ -68,9 +68,12 @@ NeonDelivery.Renderer = (function () {
         }
 
         // Road centre dashes
-        drawRoadMarkings(wc);
+        drawRoadMarkings(wc, world);
 
-        // Buildings (sorted back-to-front, but all same z so order doesn't matter)
+        // Asphalt texture (subtle noise dots, baked once)
+        addAsphaltTexture(wc, world);
+
+        // Buildings
         for (const b of world.buildingRecs) {
             drawBuilding(wc, b);
         }
@@ -78,30 +81,125 @@ NeonDelivery.Renderer = (function () {
         worldDirty = false;
     }
 
-    function drawRoadMarkings(wc) {
-        const RC = C.ROAD_CENTERS;
-        wc.strokeStyle = C.COLOR.ROAD_LINE;
-        wc.globalAlpha = 0.45;
-        wc.lineWidth   = 1.5;
-        wc.setLineDash([10, 14]);
+    // ── Road markings ────────────────────────────────────────────
+    //  Roads are 3 tiles wide (ROAD_HALF = 1 ⇒ centre-1..centre+1).
+    //  Markings stop at intersections (segmented helpers).
 
+    function drawRoadMarkings(wc, world) {
+        const RC     = C.ROAD_CENTERS;
+        const _TS    = C.TILE_SIZE;
+        const _WS    = C.WORLD_SIZE;
+        const roadW  = C.ROAD_WIDTH_TILES * _TS;   // 3 * 16 = 48 px
+        const halfW  = roadW / 2;                  // 24 px from centre
+
+        wc.save();
+        wc.lineCap = 'round';
+
+        // ── 1. Road edge / kerb lines (light grey) ──────────────────
+        wc.strokeStyle = 'rgba(225,230,235,0.60)';
+        wc.lineWidth   = 2;
+        wc.setLineDash([]);
         for (const rc of RC) {
-            // Horizontal centre line
-            const cy = rc * TS + TS / 2;
-            wc.beginPath();
-            wc.moveTo(0, cy);
-            wc.lineTo(WS, cy);
-            wc.stroke();
-            // Vertical centre line
-            const cx = rc * TS + TS / 2;
-            wc.beginPath();
-            wc.moveTo(cx, 0);
-            wc.lineTo(cx, WS);
-            wc.stroke();
+            const centre = rc * _TS + _TS / 2;
+            const edgeA  = centre - halfW;
+            const edgeB  = centre + halfW;
+            // Horizontal road edges
+            wc.beginPath(); wc.moveTo(0, edgeA); wc.lineTo(_WS, edgeA); wc.stroke();
+            wc.beginPath(); wc.moveTo(0, edgeB); wc.lineTo(_WS, edgeB); wc.stroke();
+            // Vertical road edges
+            wc.beginPath(); wc.moveTo(edgeA, 0); wc.lineTo(edgeA, _WS); wc.stroke();
+            wc.beginPath(); wc.moveTo(edgeB, 0); wc.lineTo(edgeB, _WS); wc.stroke();
+        }
+
+        // ── 2. Double yellow centre lines (segmented, skip intersections) ──
+        wc.strokeStyle = '#e8c84a';
+        wc.globalAlpha = 0.90;
+        wc.lineWidth   = 1.5;
+        wc.setLineDash([16, 12]);
+        const yOff = 2.4; // px either side of centre
+        for (const rc of RC) {
+            const centre = rc * _TS + _TS / 2;
+            drawHRoadSegmented(wc, centre - yOff, RC, halfW, _TS, _WS);
+            drawHRoadSegmented(wc, centre + yOff, RC, halfW, _TS, _WS);
+            drawVRoadSegmented(wc, centre - yOff, RC, halfW, _TS, _WS);
+            drawVRoadSegmented(wc, centre + yOff, RC, halfW, _TS, _WS);
+        }
+
+        // ── 3. White lane dividers (segmented, skip intersections) ───────
+        wc.strokeStyle = '#e8edf2';
+        wc.globalAlpha = 0.72;
+        wc.lineWidth   = 1.4;
+        wc.setLineDash([12, 14]);
+        const laneOff = halfW * 0.5; // quarter-width offset from centre
+        for (const rc of RC) {
+            const centre = rc * _TS + _TS / 2;
+            drawHRoadSegmented(wc, centre - laneOff, RC, halfW, _TS, _WS);
+            drawHRoadSegmented(wc, centre + laneOff, RC, halfW, _TS, _WS);
+            drawVRoadSegmented(wc, centre - laneOff, RC, halfW, _TS, _WS);
+            drawVRoadSegmented(wc, centre + laneOff, RC, halfW, _TS, _WS);
         }
 
         wc.setLineDash([]);
         wc.globalAlpha = 1;
+        wc.restore();
+    }
+
+    // Draw a horizontal line segment that skips intersections
+    function drawHRoadSegmented(ctx, y, roadCentres, halfW, _TS, worldSize) {
+        let startX = 0;
+        for (const rc of roadCentres) {
+            const ic = rc * _TS + _TS / 2;
+            const left  = ic - halfW;
+            const right = ic + halfW;
+            if (left > startX) {
+                ctx.beginPath(); ctx.moveTo(startX, y); ctx.lineTo(left, y); ctx.stroke();
+            }
+            startX = right;
+        }
+        if (startX < worldSize) {
+            ctx.beginPath(); ctx.moveTo(startX, y); ctx.lineTo(worldSize, y); ctx.stroke();
+        }
+    }
+
+    // Draw a vertical line segment that skips intersections
+    function drawVRoadSegmented(ctx, x, roadCentres, halfW, _TS, worldSize) {
+        let startY = 0;
+        for (const rc of roadCentres) {
+            const ic  = rc * _TS + _TS / 2;
+            const top = ic - halfW;
+            const bot = ic + halfW;
+            if (top > startY) {
+                ctx.beginPath(); ctx.moveTo(x, startY); ctx.lineTo(x, top); ctx.stroke();
+            }
+            startY = bot;
+        }
+        if (startY < worldSize) {
+            ctx.beginPath(); ctx.moveTo(x, startY); ctx.lineTo(x, worldSize); ctx.stroke();
+        }
+    }
+
+    // ── Asphalt texture ───────────────────────────────────────────
+    //  Subtle deterministic noise dots baked once into the world canvas.
+    function addAsphaltTexture(wc, world) {
+        const _TS = C.TILE_SIZE;
+        wc.save();
+        for (let ty = 0; ty < C.WORLD_TILES; ty++) {
+            for (let tx = 0; tx < C.WORLD_TILES; tx++) {
+                const tile = world.getTileAt(tx * _TS + 1, ty * _TS + 1);
+                if (tile !== TT.ROAD && tile !== TT.INTERSECTION) continue;
+                const wx = tx * _TS, wy = ty * _TS;
+                for (let i = 0; i < 4; i++) {
+                    const seed = (tx * 374761393 + ty * 668265263 + i * 1274126177) >>> 0;
+                    const rx = ((seed ^ (seed >>> 16)) * 0x45d9f3b >>> 0) / 0xffffffff;
+                    const ry = ((seed ^ (seed >>> 13)) * 0xb78e3b5d >>> 0) / 0xffffffff;
+                    wc.fillStyle = (i % 2 === 0)
+                        ? 'rgba(255,255,255,0.025)'
+                        : 'rgba(0,0,0,0.045)';
+                    wc.fillRect(wx + rx * _TS, wy + ry * _TS, 1, 1);
+                }
+            }
+        }
+        wc.restore();
     }
 
     function drawBuilding(wc, b) {
@@ -319,84 +417,249 @@ NeonDelivery.Renderer = (function () {
     }
 
     // ── Car ──────────────────────────────────────────────────
+    // Detailed top-down silhouette: shadow, wheels, body, cabin,
+    // windshield, roof, rear window, headlights, tail lights, bumpers, mirrors.
 
     function drawCar(ctx, camera, car) {
         const s = camera.worldToScreen(car.x, car.y);
-        if (s.x < -40 || s.x > CW+40 || s.y < -40 || s.y > CH+40) return;
+        if (s.x < -80 || s.x > CW + 80 || s.y < -80 || s.y > CH + 80) return;
 
         const color = C.COLOR.CAR[car.colorIdx];
+        const z = camera.zoom != null ? camera.zoom : 1;
+        const W = 24 * z;
+        const H = 42 * z;
+
         ctx.save();
         ctx.translate(s.x, s.y);
-        if (car.axis === 'v') ctx.rotate(Math.PI / 2);
+        if (car.axis === 'h') ctx.rotate(Math.PI / 2);
+        if (car.spd < 0)     ctx.rotate(Math.PI);
 
-        // Body
+        // ── Shadow ─────────────────────────────────────────────
+        ctx.save();
+        ctx.translate(3 * z, 4 * z);
+        ctx.fillStyle = 'rgba(0,0,0,0.38)';
+        ctx.beginPath();
+        ctx.moveTo(-W*0.30,-H*0.50);
+        ctx.quadraticCurveTo(-W*0.48,-H*0.44,-W*0.50,-H*0.25);
+        ctx.lineTo(-W*0.50, H*0.30);
+        ctx.quadraticCurveTo(-W*0.47, H*0.48,-W*0.30, H*0.50);
+        ctx.lineTo( W*0.30, H*0.50);
+        ctx.quadraticCurveTo( W*0.47, H*0.48, W*0.50, H*0.30);
+        ctx.lineTo( W*0.50,-H*0.25);
+        ctx.quadraticCurveTo( W*0.48,-H*0.44, W*0.30,-H*0.50);
+        ctx.closePath(); ctx.fill();
+        ctx.restore();
+
+        // ── Wheels ─────────────────────────────────────────────
+        ctx.fillStyle = '#090a0c';
+        const wW = W * 0.18, wH = H * 0.22;
+        ctx.fillRect(-W*0.58, -H*0.31, wW, wH);  // front-left
+        ctx.fillRect( W*0.40, -H*0.31, wW, wH);  // front-right
+        ctx.fillRect(-W*0.58,  H*0.15, wW, wH);  // rear-left
+        ctx.fillRect( W*0.40,  H*0.15, wW, wH);  // rear-right
+
+        // ── Body silhouette ────────────────────────────────────
+        ctx.fillStyle   = color;
+        ctx.strokeStyle = 'rgba(0,0,0,0.75)';
+        ctx.lineWidth   = 1.5 * z;
+        ctx.beginPath();
+        ctx.moveTo(-W*0.28,-H*0.50);
+        ctx.quadraticCurveTo(-W*0.44,-H*0.47,-W*0.48,-H*0.34);
+        ctx.lineTo(-W*0.50, H*0.27);
+        ctx.quadraticCurveTo(-W*0.47, H*0.45,-W*0.30, H*0.49);
+        ctx.lineTo( W*0.30, H*0.49);
+        ctx.quadraticCurveTo( W*0.47, H*0.45, W*0.50, H*0.27);
+        ctx.lineTo( W*0.48,-H*0.34);
+        ctx.quadraticCurveTo( W*0.44,-H*0.47, W*0.28,-H*0.50);
+        ctx.closePath();
+        ctx.fill(); ctx.stroke();
+
+        // ── Side shading ──────────────────────────────────────
+        ctx.fillStyle = 'rgba(0,0,0,0.17)';
+        ctx.beginPath();
+        ctx.moveTo(-W*0.50,-H*0.22); ctx.lineTo(-W*0.40,-H*0.18);
+        ctx.lineTo(-W*0.39, H*0.32); ctx.lineTo(-W*0.48, H*0.28);
+        ctx.closePath(); ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo( W*0.50,-H*0.22); ctx.lineTo( W*0.40,-H*0.18);
+        ctx.lineTo( W*0.39, H*0.32); ctx.lineTo( W*0.48, H*0.28);
+        ctx.closePath(); ctx.fill();
+
+        // ── Hood highlight ────────────────────────────────────
+        ctx.fillStyle = 'rgba(255,255,255,0.07)';
+        ctx.beginPath();
+        ctx.moveTo(-W*0.31,-H*0.43); ctx.lineTo( W*0.31,-H*0.43);
+        ctx.lineTo( W*0.36,-H*0.24); ctx.lineTo(-W*0.36,-H*0.24);
+        ctx.closePath(); ctx.fill();
+
+        // ── Cabin ───────────────────────────────────────────
+        ctx.fillStyle = '#101820';
+        ctx.beginPath();
+        ctx.moveTo(-W*0.34,-H*0.22); ctx.lineTo( W*0.34,-H*0.22);
+        ctx.lineTo( W*0.38, H*0.25); ctx.lineTo(-W*0.38, H*0.25);
+        ctx.closePath(); ctx.fill();
+
+        // ── Windshield ─────────────────────────────────────
+        const glassGrad = ctx.createLinearGradient(0, -H*0.20, 0, H*0.05);
+        glassGrad.addColorStop(0, 'rgba(140,235,255,0.95)');
+        glassGrad.addColorStop(1, 'rgba(25,110,145,0.90)');
+        ctx.fillStyle = glassGrad;
+        ctx.beginPath();
+        ctx.moveTo(-W*0.30,-H*0.19); ctx.lineTo( W*0.30,-H*0.19);
+        ctx.lineTo( W*0.34,-H*0.02); ctx.lineTo(-W*0.34,-H*0.02);
+        ctx.closePath(); ctx.fill();
+        // Glass reflection
+        ctx.fillStyle = 'rgba(255,255,255,0.22)';
+        ctx.beginPath();
+        ctx.moveTo(-W*0.22,-H*0.17); ctx.lineTo(-W*0.06,-H*0.17);
+        ctx.lineTo(-W*0.17,-H*0.04); ctx.lineTo(-W*0.30,-H*0.04);
+        ctx.closePath(); ctx.fill();
+
+        // ── Roof ──────────────────────────────────────────────
         ctx.fillStyle = color;
-        ctx.fillRect(-car.w/2, -car.h/2, car.w, car.h);
+        ctx.beginPath();
+        ctx.moveTo(-W*0.34, H*0.02); ctx.lineTo( W*0.34, H*0.02);
+        ctx.lineTo( W*0.35, H*0.19); ctx.lineTo(-W*0.35, H*0.19);
+        ctx.closePath(); ctx.fill();
+        // Roof sheen
+        ctx.fillStyle = 'rgba(255,255,255,0.08)';
+        ctx.fillRect(-W*0.25, H*0.045, W*0.50, H*0.035);
 
-        // Windshield
-        ctx.fillStyle = 'rgba(0,220,255,0.5)';
-        ctx.fillRect(-car.w/2 + 3, -car.h/2 + 2, car.w - 6, car.h * 0.4);
+        // ── Rear window ──────────────────────────────────────
+        ctx.fillStyle = 'rgba(25,65,85,0.93)';
+        ctx.beginPath();
+        ctx.moveTo(-W*0.32, H*0.20); ctx.lineTo( W*0.32, H*0.20);
+        ctx.lineTo( W*0.29, H*0.32); ctx.lineTo(-W*0.29, H*0.32);
+        ctx.closePath(); ctx.fill();
 
-        // Headlights
-        ctx.shadowBlur  = 6;
-        ctx.shadowColor = '#ffeeaa';
-        ctx.fillStyle   = '#ffeeaa';
-        const hDir = car.spd > 0 ? 1 : -1;
-        ctx.fillRect(hDir * (car.w/2 - 3), -car.h/2 + 1, 2, 4);
-        ctx.fillRect(hDir * (car.w/2 - 3), car.h/2 - 5,  2, 4);
+        // ── Headlights ──────────────────────────────────────
+        ctx.shadowBlur  = 8 * z;
+        ctx.shadowColor = '#fff6aa';
+        ctx.fillStyle   = '#fff3a3';
+        ctx.beginPath();
+        ctx.roundRect(-W*0.38, -H*0.46, W*0.20, H*0.07, 2*z);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.roundRect( W*0.18, -H*0.46, W*0.20, H*0.07, 2*z);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // ── Tail lights ──────────────────────────────────────
+        ctx.fillStyle   = '#ff2a22';
+        ctx.shadowBlur  = 4 * z;
+        ctx.shadowColor = '#ff2200';
+        ctx.fillRect(-W*0.39, H*0.42, W*0.18, H*0.055);
+        ctx.fillRect( W*0.21, H*0.42, W*0.18, H*0.055);
+        ctx.shadowBlur = 0;
+
+        // ── Bumpers ───────────────────────────────────────────
+        ctx.strokeStyle = 'rgba(15,15,18,0.9)';
+        ctx.lineWidth   = 2 * z;
+        ctx.beginPath(); ctx.moveTo(-W*0.25,-H*0.49); ctx.lineTo( W*0.25,-H*0.49); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-W*0.26, H*0.48); ctx.lineTo( W*0.26, H*0.48); ctx.stroke();
+
+        // ── Mirrors ───────────────────────────────────────────
+        ctx.fillStyle = '#11151a';
+        ctx.fillRect(-W*0.56, -H*0.10, W*0.12, H*0.07);
+        ctx.fillRect( W*0.44, -H*0.10, W*0.12, H*0.07);
 
         ctx.restore();
     }
 
-    // ── Police ───────────────────────────────────────────────
+    // ── Police car ───────────────────────────────────────────
+    // White car body with black stripes.
+    // Chasing: alternating red/blue roof bar flashes.
 
     function drawPolice(ctx, camera, p) {
         const s = camera.worldToScreen(p.x, p.y);
-        if (s.x < -50 || s.x > CW+50 || s.y < -50 || s.y > CH+50) return;
+        if (s.x < -60 || s.x > CW+60 || s.y < -60 || s.y > CH+60) return;
 
         const chasing = p.state === 'chase';
-        const flash   = chasing && (Math.floor(t / 200) % 2 === 0);
-        const r       = C.POLICE_RADIUS;
+        const W = 18, H = 34;
+        // Flash alternates between red and blue every 200ms
+        const flashRed  = chasing && (Math.floor(t / 200) % 2 === 0);
+        const flashBlue = chasing && !flashRed;
 
         ctx.save();
+        ctx.translate(s.x, s.y);
 
-        // Searchlight cone
+        // ── Chase searchlight glow ────────────────────────────
         if (chasing) {
-            ctx.globalAlpha = 0.12;
-            const grad = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, 100);
-            grad.addColorStop(0,   flash ? 'rgba(255,50,50,1)'   : 'rgba(255,50,50,0.5)');
-            grad.addColorStop(1,   'rgba(255,50,50,0)');
+            const glowColor = flashRed ? 'rgba(255,40,40,' : 'rgba(40,80,255,';
+            ctx.globalAlpha = 0.13;
+            const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, 110);
+            grad.addColorStop(0, glowColor + '1)');
+            grad.addColorStop(1, glowColor + '0)');
             ctx.fillStyle = grad;
-            ctx.beginPath();
-            ctx.arc(s.x, s.y, 100, 0, Math.PI * 2);
-            ctx.fill();
+            ctx.beginPath(); ctx.arc(0, 0, 110, 0, Math.PI * 2); ctx.fill();
             ctx.globalAlpha = 1;
         }
 
-        // Body
-        ctx.shadowBlur  = chasing ? 20 : 8;
-        ctx.shadowColor = C.COLOR.POLICE;
-        ctx.fillStyle   = chasing ? C.COLOR.POLICE : '#cc2244';
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
-        ctx.fill();
+        // ── Drop shadow ───────────────────────────────────────
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.fillRect(-W/2 + 2, -H/2 + 2, W, H);
 
-        // Warning light bar
-        if (chasing && p.alertFlash > 0) {
-            ctx.fillStyle   = '#ffffff';
-            ctx.shadowBlur  = 30;
-            ctx.shadowColor = '#ff0000';
+        // ── White body ───────────────────────────────────────
+        ctx.fillStyle = '#f0f0f0';
+        ctx.fillRect(-W/2, -H/2, W, H);
+
+        // ── Black diagonal stripes ───────────────────────────
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(-W/2, -H/2, W, H);  // clip to car body
+        ctx.clip();
+        ctx.strokeStyle = '#111111';
+        ctx.lineWidth   = 3.5;
+        ctx.globalAlpha = 0.85;
+        for (let i = -H; i < H + W; i += 10) {
             ctx.beginPath();
-            ctx.arc(s.x, s.y, r + 4, 0, Math.PI * 2);
+            ctx.moveTo(-W/2 + i,        -H/2);
+            ctx.lineTo(-W/2 + i + H/2,   H/2);
             ctx.stroke();
         }
+        ctx.restore();
 
-        // Badge
-        ctx.font         = 'bold 8px Rajdhani';
-        ctx.textAlign    = 'center';
-        ctx.fillStyle    = '#ffffff';
-        ctx.shadowBlur   = 0;
-        ctx.fillText('🚨', s.x, s.y + 3);
+        // ── Windshield ────────────────────────────────────────
+        ctx.fillStyle   = 'rgba(180,220,255,0.65)';
+        ctx.fillRect(-W * 0.35, -H * 0.48, W * 0.70, H * 0.22);
+        ctx.fillStyle = 'rgba(255,255,255,0.22)';
+        ctx.fillRect(-W * 0.28, -H * 0.46, W * 0.25, H * 0.07);
+
+        // ── Rear window ───────────────────────────────────────
+        ctx.fillStyle = 'rgba(40,60,80,0.7)';
+        ctx.fillRect(-W * 0.32, H * 0.26, W * 0.64, H * 0.18);
+
+        // ── Headlights ───────────────────────────────────────
+        ctx.shadowBlur  = 8; ctx.shadowColor = '#ffffcc';
+        ctx.fillStyle   = '#ffeeaa';
+        ctx.fillRect(-W * 0.40, -H * 0.48, W * 0.18, H * 0.09);
+        ctx.fillRect( W * 0.22, -H * 0.48, W * 0.18, H * 0.09);
+        ctx.shadowBlur = 0;
+
+        // ── Roof light bar ────────────────────────────────────
+        // Always visible bar; flashes red/blue when chasing
+        const barW = W * 0.6, barH = H * 0.10;
+        const barX = -barW / 2, barY = -H * 0.12;
+
+        if (chasing) {
+            // Left half: red; right half: blue  (swap every 200ms)
+            const leftCol  = flashRed  ? '#ff2020' : '#2040ff';
+            const rightCol = flashRed  ? '#2040ff' : '#ff2020';
+            ctx.shadowBlur = 16;
+
+            ctx.shadowColor = leftCol;
+            ctx.fillStyle   = leftCol;
+            ctx.fillRect(barX, barY, barW / 2, barH);
+
+            ctx.shadowColor = rightCol;
+            ctx.fillStyle   = rightCol;
+            ctx.fillRect(barX + barW / 2, barY, barW / 2, barH);
+        } else {
+            // Parked / patrol — dark bar
+            ctx.fillStyle = '#333344';
+            ctx.fillRect(barX, barY, barW, barH);
+        }
+        ctx.shadowBlur = 0;
 
         ctx.restore();
     }
@@ -411,16 +674,30 @@ NeonDelivery.Renderer = (function () {
         ctx.rotate(drone.angle + Math.PI / 2); // nose pointing in movement dir
 
         const hit   = drone.hitFlash > 0;
-        const color = hit ? C.COLOR.RED
+        const color = hit            ? C.COLOR.RED
+                    : drone.dashing  ? '#ff00cc'
                     : drone.boosting ? C.COLOR.DRONE_BOOST
                     : C.COLOR.DRONE;
 
-        // Glow
-        ctx.shadowBlur  = drone.boosting ? 30 : 18;
+        // Glow — dash gets extra wide magenta glow
+        ctx.shadowBlur  = drone.dashing ? 40 : drone.boosting ? 30 : 18;
         ctx.shadowColor = color;
 
-        // Boost flame
-        if (drone.boosting) {
+        // Flame — dash gets a wider magenta flame
+        if (drone.dashing) {
+            const flameLen = 16 + Math.random() * 12;
+            const grad = ctx.createLinearGradient(0, 6, 0, 6 + flameLen);
+            grad.addColorStop(0, '#ff00cc');
+            grad.addColorStop(0.5, '#cc00ff');
+            grad.addColorStop(1, 'rgba(255,0,200,0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.moveTo(-8, 6);
+            ctx.lineTo(8, 6);
+            ctx.lineTo(0, 6 + flameLen);
+            ctx.closePath();
+            ctx.fill();
+        } else if (drone.boosting) {
             const flameLen = 10 + Math.random() * 8;
             const grad = ctx.createLinearGradient(0, 6, 0, 6 + flameLen);
             grad.addColorStop(0, '#00ffcc');
@@ -463,7 +740,7 @@ NeonDelivery.Renderer = (function () {
             ctx.stroke();
         });
 
-        // Shield ring
+        // Shield ring (upgrade)
         if (drone.shields > 0) {
             ctx.globalAlpha  = 0.45 + 0.2 * Math.sin(t * 0.005);
             ctx.strokeStyle  = '#4466ff';
@@ -473,6 +750,43 @@ NeonDelivery.Renderer = (function () {
             ctx.beginPath();
             ctx.arc(0, 0, 20, 0, Math.PI * 2);
             ctx.stroke();
+        }
+
+        // Spawn protection ring — green shrinking arc + countdown
+        if (drone.spawnProtection > 0) {
+            const sp      = drone.spawnProtection;
+            const spMax   = drone.spawnProtectMax;
+            const spFrac  = sp / spMax;
+            const secs    = Math.ceil(sp / 1000);
+            const flicker = sp < 1200 && Math.floor(t / 120) % 2 === 0;
+
+            if (!flicker) {
+                // Outer glow ring (full circle, fades as timer runs out)
+                ctx.globalAlpha = 0.25 + 0.15 * Math.sin(t * 0.006);
+                ctx.strokeStyle = '#00ff88';
+                ctx.lineWidth   = 6;
+                ctx.shadowBlur  = 28;
+                ctx.shadowColor = '#00ff88';
+                ctx.beginPath();
+                ctx.arc(0, 0, 28, 0, Math.PI * 2);
+                ctx.stroke();
+
+                // Countdown arc (shrinks as timer depletes)
+                ctx.globalAlpha = 0.85;
+                ctx.lineWidth   = 3;
+                ctx.shadowBlur  = 14;
+                ctx.beginPath();
+                ctx.arc(0, 0, 28, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * spFrac);
+                ctx.stroke();
+
+                // Countdown number
+                ctx.globalAlpha  = 1;
+                ctx.shadowBlur   = 10;
+                ctx.font         = 'bold 12px Orbitron';
+                ctx.fillStyle    = '#00ff88';
+                ctx.textAlign    = 'center';
+                ctx.fillText(secs, 0, -36);
+            }
         }
 
         ctx.restore();
@@ -587,7 +901,43 @@ NeonDelivery.Renderer = (function () {
         ctx.textAlign    = 'left';
         ctx.fillText('BOOST', bBarX, bBarY - 4);
 
-        // ── Delivery arrow ───────────────────────────────────
+        // ── Dash bar ───────────────────────────────────────────
+        const dBarX = bBarX + bBarW + 14;
+        const dBarY = bBarY;
+        const dBarW = 90;
+        const dBarH = bBarH;
+        const dCoolPct = drone.dashCoolTimer > 0
+            ? 1 - drone.dashCoolTimer / drone.dashCooldown
+            : 1;
+        const dActivePct = drone.dashing
+            ? drone.dashTimer / drone.dashDuration
+            : 0;
+        const dashReady = !drone.dashing && dCoolPct >= 1;
+
+        ctx.fillStyle = 'rgba(2,8,16,0.7)';
+        ctx.fillRect(dBarX - 2, dBarY - 2, dBarW + 4, dBarH + 4);
+        ctx.fillStyle = 'rgba(255,0,204,0.12)';
+        ctx.fillRect(dBarX, dBarY, dBarW, dBarH);
+
+        if (drone.dashing) {
+            ctx.fillStyle   = '#ff00cc';
+            ctx.shadowBlur  = 14;
+            ctx.shadowColor = '#ff00cc';
+            ctx.fillRect(dBarX, dBarY, dBarW * dActivePct, dBarH);
+        } else {
+            ctx.fillStyle   = dashReady ? '#ff00cc' : 'rgba(255,0,204,0.4)';
+            ctx.shadowBlur  = dashReady ? 8 : 0;
+            ctx.shadowColor = '#ff00cc';
+            ctx.fillRect(dBarX, dBarY, dBarW * dCoolPct, dBarH);
+        }
+
+        ctx.font      = '9px Rajdhani';
+        ctx.fillStyle = dashReady ? '#ff00cc' : 'rgba(255,0,204,0.5)';
+        ctx.shadowBlur = 0;
+        ctx.textAlign = 'left';
+        ctx.fillText('DASH  ▶▶', dBarX, dBarY - 4);
+
+        // ── Delivery arrow ────────────────────────────────────────
         drawDeliveryArrow(ctx, drone, entities);
 
         ctx.shadowBlur = 0;

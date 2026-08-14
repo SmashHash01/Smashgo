@@ -33,6 +33,7 @@ NeonDelivery.Particles = (function () {
     function emit(type, x, y, count) {
         switch (type) {
             case 'boost':      emitBoost(x, y, count); break;
+            case 'dash':       emitDash(x, y, count);  break;
             case 'pickup':     emitPickup(x, y, count); break;
             case 'delivery':   emitDelivery(x, y, count); break;
             case 'explosion':  emitExplosion(x, y, count); break;
@@ -55,6 +56,25 @@ NeonDelivery.Particles = (function () {
                 r:     2 + Math.random() * 2,
                 color: Math.random() < 0.5 ? '#00f5ff' : '#00ffcc',
                 glow:  false,
+                shrink: true
+            });
+        }
+    }
+
+    // Dash exhaust: wide magenta + white burst, faster & bigger than boost
+    function emitDash(x, y, count) {
+        for (let i = 0; i < count; i++) {
+            const ang = Math.PI + (Math.random() - 0.5) * 1.8; // wider spread
+            const spd = 2.5 + Math.random() * 5.0;
+            const colors = ['#ff00cc', '#ff44dd', '#ffffff', '#cc00ff'];
+            spawn({
+                x, y,
+                vx:    Math.cos(ang) * spd,
+                vy:    Math.sin(ang) * spd,
+                life:  180 + Math.random() * 200,
+                r:     3 + Math.random() * 3,
+                color: colors[Math.floor(Math.random() * colors.length)],
+                glow:  true,
                 shrink: true
             });
         }

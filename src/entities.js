@@ -108,7 +108,9 @@ NeonDelivery.Entities = (function () {
                     spd: spd * lane.dir,
                     w:   C.CAR_W,
                     h:   C.CAR_H,
-                    colorIdx
+                    colorIdx,
+                    respawnTimer: 0,   // ms until reappear (0 = active)
+                    lane                // keep lane ref for respawn
                 });
             } else {
                 const startY = Math.random() * WS;
@@ -119,7 +121,9 @@ NeonDelivery.Entities = (function () {
                     spd: spd * lane.dir,
                     w:   C.CAR_H,   // rotated: thinner dimension along x
                     h:   C.CAR_W,
-                    colorIdx
+                    colorIdx,
+                    respawnTimer: 0,
+                    lane
                 });
             }
         }
@@ -159,19 +163,48 @@ NeonDelivery.Entities = (function () {
 
     // ── Cars ─────────────────────────────────────────────────
 
+    function respawnCar(car) {
+        const WS = C.WORLD_SIZE;
+        // Pick a fresh random entry position at the opposite edge
+        if (car.axis === 'h') {
+            car.x = car.spd > 0 ? -60 : WS + 60;
+            // Randomise y within same lane band
+            car.y = car.lane ? car.lane.y : car.y;
+        } else {
+            car.y = car.spd > 0 ? -60 : WS + 60;
+            car.x = car.lane ? car.lane.x : car.x;
+        }
+        car.respawnTimer = 0;
+    }
+
     function updateCars(dt, drone) {
         const WS = C.WORLD_SIZE;
         const DR = C.DRONE_RADIUS + 10;
+        const RESPAWN_MS = 3000;
 
         for (const car of cars) {
+
+            // Waiting to respawn
+            if (car.respawnTimer > 0) {
+                car.respawnTimer -= dt;
+                if (car.respawnTimer <= 0) respawnCar(car);
+                continue;   // skip movement & collision while off-screen
+            }
+
+            // Move
             if (car.axis === 'h') {
                 car.x += car.spd;
-                if (car.x >  WS + 50) car.x = -50;
-                if (car.x < -50)      car.x =  WS + 50;
+                // Exited world — start respawn timer
+                if (car.x > WS + 50 || car.x < -50) {
+                    car.respawnTimer = RESPAWN_MS;
+                    continue;
+                }
             } else {
                 car.y += car.spd;
-                if (car.y >  WS + 50) car.y = -50;
-                if (car.y < -50)      car.y =  WS + 50;
+                if (car.y > WS + 50 || car.y < -50) {
+                    car.respawnTimer = RESPAWN_MS;
+                    continue;
+                }
             }
 
             // Collision with drone

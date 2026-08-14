@@ -17,6 +17,7 @@ NeonDelivery.Config = {
     // Road centers (tile index).  Each road = center ±1 tile (3 tiles wide).
     ROAD_CENTERS: [7, 18, 29, 40, 51],
     ROAD_HALF: 1,
+    ROAD_WIDTH_TILES: 3,   // centre-1 to centre+1 = 3 tiles wide (matches world.js)
 
     // ── Tile types ──────────────────────────────────────────
     TILE: { ROAD: 0, BUILDING: 1, ALLEY: 2, INTERSECTION: 3 },
@@ -125,10 +126,10 @@ NeonDelivery.Config = {
     // ── Neon colour palette ──────────────────────────────────
     COLOR: {
         BG:           '#020810',
-        ROAD:         '#080f1e',
-        ROAD_LINE:    '#ffe600',
-        INTERSECTION: '#0a1228',
-        ALLEY:        '#060c18',
+        ROAD:         '#30343c',
+        ROAD_LINE:    '#edf1f4',
+        INTERSECTION: '#343942',
+        ALLEY:        '#171a20',
         BUILDING: [
             '#0c1428', '#0d1830', '#0a1222',
             '#111535', '#0e1628', '#0b1325'
@@ -148,7 +149,7 @@ NeonDelivery.Config = {
         DRONE_BOOST: '#00ffcc',
         PACKAGE:     '#00ff88',
         DELIVERY:    '#ff00cc',
-        CAR: ['#ff3366', '#ffaa00', '#00ccff', '#ff66bb', '#44ffaa', '#cc44ff'],
+        CAR: ['#ff3158', '#ff9f1c', '#18c7ff', '#ff5fba', '#39e58c', '#aa62ff'],
         POLICE:      '#ff3366',
     }
 };

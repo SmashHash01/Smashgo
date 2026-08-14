@@ -35,13 +35,6 @@ NeonDelivery.Events = (function () {
             }
         },
         {
-            type: 'blackout',
-            duration: 8000,
-            weight: 2,
-            onStart(_data) { NeonDelivery.Audio.warning(); },
-            onTick(_data, _dt) {}
-        },
-        {
             type: 'wind',
             duration: 10000,
             weight: 3,

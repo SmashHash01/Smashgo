@@ -146,8 +146,14 @@ NeonDelivery.Game = (function () {
         // Cap dt to avoid huge jumps after tab blur
         const dt = Math.min(rawDt, 50);
 
-        update(dt);
-        render(dt);
+        try {
+            update(dt);
+            render(dt);
+        } catch (err) {
+            // Log the error but keep the loop alive so one bad frame
+            // doesn't freeze the game permanently.
+            console.error('[NeonDelivery] frame error:', err);
+        }
     }
 
     // ── Update ───────────────────────────────────────────────
