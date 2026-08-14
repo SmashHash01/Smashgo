@@ -208,8 +208,11 @@ NeonDelivery.Entities = (function () {
             }
 
             // Collision with drone
-            const hw = car.w / 2 + DR;
-            const hh = car.h / 2 + DR;
+            // Swap width and height for horizontal cars
+            const cw = car.axis === 'h' ? car.h : car.w;
+            const ch = car.axis === 'h' ? car.w : car.h;
+            const hw = cw / 2 + DR;
+            const hh = ch / 2 + DR;
             if (Math.abs(drone.x - car.x) < hw &&
                 Math.abs(drone.y - car.y) < hh) {
                 if (drone.takeDamage()) {

@@ -99,8 +99,8 @@ NeonDelivery.Config = {
     // ── Car speeds ───────────────────────────────────────────
     CAR_SPEED_MIN: 1.2,
     CAR_SPEED_MAX: 2.4,
-    CAR_W: 22,
-    CAR_H: 14,
+    CAR_W: 24,
+    CAR_H: 42,
 
     // ── Police ───────────────────────────────────────────────
     POLICE_SPEED: 2.8,
