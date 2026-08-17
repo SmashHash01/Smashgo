@@ -6,12 +6,19 @@ const path = require('path');
 const ArenaRoom = require('./rooms/ArenaRoom');
 
 const app = express();
-app.use(cors());
+app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'OPTIONS']
+}));
 app.use(express.static(path.join(__dirname, '../')));
 
 const server = http.createServer(app);
 const io = new Server(server, {
-    cors: { origin: '*' },
+    cors: {
+        origin: '*',
+        methods: ['GET', 'POST']
+    },
+    transports: ['websocket', 'polling'],
     // Fast realtime packets are already small after snapshot packing.
     perMessageDeflate: false
 });
