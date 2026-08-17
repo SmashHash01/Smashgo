@@ -4,7 +4,15 @@ NeonDelivery.Network = (function() {
 
     function init() {
         if (typeof io === 'undefined' || socket) return;
-        socket = io();
+
+        // Connect to same origin if self-hosted (e.g. on Render or localhost), or to configured Render backend if on GitHub Pages
+        const serverUrl = window.SMASHGO_SERVER_URL || (
+            window.location.hostname.includes('github.io')
+                ? 'https://smashgo.onrender.com'
+                : undefined
+        );
+
+        socket = serverUrl ? io(serverUrl) : io();
         socket.on('connect', () => {
             localPlayerId = socket.id;
         });

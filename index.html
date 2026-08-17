@@ -248,7 +248,8 @@
 </div><!-- /game-container -->
 
 <!-- ── Scripts — load order is dependency order ─────────────── -->
-<script src="/socket.io/socket.io.js"></script>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script>if (typeof io === 'undefined') document.write('<script src="/socket.io/socket.io.js"><\\/script>');</script>
 <script src="src/shared/gameplay.js"></script>
 <script src="src/config.js"></script>
 <script src="src/storage.js"></script>
