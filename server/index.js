@@ -7,16 +7,18 @@ const ArenaRoom = require('./rooms/ArenaRoom');
 
 const app = express();
 app.use(cors({
-    origin: '*',
-    methods: ['GET', 'POST', 'OPTIONS']
+    origin: true,
+    methods: ['GET', 'POST', 'OPTIONS'],
+    credentials: true
 }));
 app.use(express.static(path.join(__dirname, '../')));
 
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
-        origin: '*',
-        methods: ['GET', 'POST']
+        origin: true,
+        methods: ['GET', 'POST'],
+        credentials: true
     },
     transports: ['websocket', 'polling'],
     // Fast realtime packets are already small after snapshot packing.

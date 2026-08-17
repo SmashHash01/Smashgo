@@ -110,9 +110,11 @@ NeonDelivery.Game = (function () {
             onCreateRoom: (username) => {
                 if (!username.trim()) return alert("Enter a username");
                 NeonDelivery.Network.createRoom(username, (res) => {
-                    if (res.success) {
+                    if (res && res.success) {
                         activeMode = 'multiplayer';
                         NeonDelivery.Multiplayer.onRoomStateUpdate(res.roomState);
+                    } else {
+                        alert((res && res.message) || "Could not connect to multiplayer server.");
                     }
                 });
             },
