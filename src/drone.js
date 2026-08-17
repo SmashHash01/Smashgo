@@ -157,46 +157,27 @@ NeonDelivery.Drone = (function () {
         if (hitFlash   > 0) hitFlash   -= dt;
         if (invincible > 0) invincible -= dt;
 
-        // ── Acceleration ─────────────────────────────────────
-        const speedMult = dashing ? DASH_SPEED_MULT : boosting ? boostSpeedMult : 1;
-        const maxSpd    = C.DRONE_MAX_SPEED * speedMult;
+        // ── Movement & collision simulation using shared kernel ───
+        const droneState = {
+            x, y, vx, vy, angle,
+            boosting, dashing,
+            windX: (eventState && eventState.type === 'wind') ? eventState.windX * C.WIND_MAX_FORCE : 0,
+            windY: (eventState && eventState.type === 'wind') ? eventState.windY * C.WIND_MAX_FORCE : 0
+        };
 
-        vx += move.dx * C.DRONE_ACCEL * speedMult;
-        vy += move.dy * C.DRONE_ACCEL * speedMult;
+        const soloPhysics = NeonDelivery.Gameplay.SOLO_PHYSICS || C;
+        NeonDelivery.Gameplay.stepVehicle(droneState, move, dt, world, soloPhysics);
 
-        // Wind event
-        if (eventState && eventState.type === 'wind') {
-            vx += eventState.windX * C.WIND_MAX_FORCE;
-            vy += eventState.windY * C.WIND_MAX_FORCE;
+        x = droneState.x;
+        y = droneState.y;
+        vx = droneState.vx;
+        vy = droneState.vy;
+        angle = droneState.angle;
+
+        if (droneState.hitWall) {
+            const impactSpd = Math.hypot(vx, vy);
+            onCollision(impactSpd);
         }
-
-        // Clamp speed
-        const spd = Math.sqrt(vx * vx + vy * vy);
-        if (spd > maxSpd) { vx = vx / spd * maxSpd; vy = vy / spd * maxSpd; }
-
-        // Friction (less friction during dash)
-        const friction = dashing ? 0.94 : C.DRONE_FRICTION;
-        vx *= friction;
-        vy *= friction;
-
-        // Heading angle
-        if (spd > 0.2) {
-            const targetAngle = Math.atan2(vy, vx);
-            angle += angleDiff(targetAngle, angle) * 0.18;
-        }
-
-        // ── Move & collide ───────────────────────────────────
-        const R  = C.DRONE_RADIUS;
-        const nx = x + vx, ny = y + vy;
-        const blockedX = world.isBlockedRect(nx, y, R);
-        const blockedY = world.isBlockedRect(x, ny, R);
-        const impactSpd = Math.sqrt(vx * vx + vy * vy);
-
-        if (!blockedX) x = nx; else { vx *= -0.35; onCollision(impactSpd); }
-        if (!blockedY) y = ny; else { vy *= -0.35; onCollision(impactSpd); }
-        // World clamp
-        x = Math.max(R, Math.min(WS - R, x));
-        y = Math.max(R, Math.min(WS - R, y));
 
         // Particles — dash gets magenta, normal boost gets cyan
         if (dashing && Math.random() < 0.85) {
@@ -280,13 +261,6 @@ NeonDelivery.Drone = (function () {
     function resetCleanRun() { cleanRun = true; }
 
     // ── Helpers ──────────────────────────────────────────────
-
-    function angleDiff(a, b) {
-        let d = a - b;
-        while (d >  Math.PI) d -= Math.PI * 2;
-        while (d < -Math.PI) d += Math.PI * 2;
-        return d;
-    }
 
     // ── Public ───────────────────────────────────────────────
     return {

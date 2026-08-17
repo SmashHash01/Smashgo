@@ -6,8 +6,6 @@
 // ============================================================
 NeonDelivery.Renderer = (function () {
     const C  = NeonDelivery.Config;
-    const CW = C.CANVAS_W;
-    const CH = C.CANVAS_H;
     const TS = C.TILE_SIZE;
     const WS = C.WORLD_SIZE;
     const TT = C.TILE;
@@ -341,7 +339,7 @@ NeonDelivery.Renderer = (function () {
         const { world, drone, entities, camera, eventState, gameState, uiData } = gameData;
 
         // Clear
-        ctx.clearRect(0, 0, CW, CH);
+        ctx.clearRect(0, 0, C.CANVAS_W, C.CANVAS_H);
 
         if (gameState === C.GameState.MENU ||
             gameState === C.GameState.GAMEOVER) {
@@ -353,8 +351,8 @@ NeonDelivery.Renderer = (function () {
         // Blit visible region of the pre-rendered world
         ctx.drawImage(
             worldCvs,
-            Math.floor(camera.x), Math.floor(camera.y), CW, CH,
-            0, 0, CW, CH
+            Math.floor(camera.x), Math.floor(camera.y), C.CANVAS_W, C.CANVAS_H,
+            0, 0, C.CANVAS_W, C.CANVAS_H
         );
 
         // ── Event overlays ───────────────────────────────────
@@ -390,7 +388,7 @@ NeonDelivery.Renderer = (function () {
         drawHUD(ctx, uiData, entities, drone);
 
         // ── Minimap ──────────────────────────────────────────
-        drawMinimap(ctx, camera, drone, entities);
+        drawMinimap(ctx, camera, drone, entities, gameData);
 
         // ── Blackout overlay ─────────────────────────────────
         if (eventState && eventState.type === 'blackout') {
@@ -402,32 +400,32 @@ NeonDelivery.Renderer = (function () {
 
     function drawMenuBg() {
         ctx.fillStyle = C.COLOR.BG;
-        ctx.fillRect(0, 0, CW, CH);
+        ctx.fillRect(0, 0, C.CANVAS_W, C.CANVAS_H);
         // Animated grid lines
         ctx.strokeStyle = 'rgba(0,245,255,0.06)';
         ctx.lineWidth = 1;
         const grid = 48;
         const off  = (t * 0.02) % grid;
-        for (let x = -grid + off; x < CW + grid; x += grid) {
-            ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, CH); ctx.stroke();
+        for (let x = -grid + off; x < C.CANVAS_W + grid; x += grid) {
+            ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, C.CANVAS_H); ctx.stroke();
         }
-        for (let y = -grid + off; y < CH + grid; y += grid) {
-            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(CW, y); ctx.stroke();
+        for (let y = -grid + off; y < C.CANVAS_H + grid; y += grid) {
+            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(C.CANVAS_W, y); ctx.stroke();
         }
         // Horizon glow
-        const grad = ctx.createLinearGradient(0, 0, 0, CH);
+        const grad = ctx.createLinearGradient(0, 0, 0, C.CANVAS_H);
         grad.addColorStop(0,   'rgba(255,0,204,0.0)');
         grad.addColorStop(0.5, 'rgba(0,245,255,0.04)');
         grad.addColorStop(1,   'rgba(255,0,204,0.12)');
         ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, CW, CH);
+        ctx.fillRect(0, 0, C.CANVAS_W, C.CANVAS_H);
     }
 
     // ── Package icon ─────────────────────────────────────────
 
     function drawPackageIcon(ctx, camera, job) {
         const s    = camera.worldToScreen(job.pkg.x, job.pkg.y);
-        if (s.x < -40 || s.x > CW+40 || s.y < -40 || s.y > CH+40) return;
+        if (s.x < -40 || s.x > C.CANVAS_W+40 || s.y < -40 || s.y > C.CANVAS_H+40) return;
 
         const pulse = 0.8 + 0.2 * Math.sin(t * 0.004);
         const r     = 14 * pulse;
@@ -471,7 +469,7 @@ NeonDelivery.Renderer = (function () {
 
     function drawDeliveryZone(ctx, camera, job) {
         const s    = camera.worldToScreen(job.delivery.x, job.delivery.y);
-        if (s.x < -60 || s.x > CW+60 || s.y < -60 || s.y > CH+60) return;
+        if (s.x < -60 || s.x > C.CANVAS_W+60 || s.y < -60 || s.y > C.CANVAS_H+60) return;
 
         const pulse  = 0.75 + 0.25 * Math.sin(t * 0.006);
         const outerR = 28 * pulse;
@@ -528,9 +526,9 @@ NeonDelivery.Renderer = (function () {
 
     function drawCar(ctx, camera, car) {
         const s = camera.worldToScreen(car.x, car.y);
-        if (s.x < -80 || s.x > CW + 80 || s.y < -80 || s.y > CH + 80) return;
+        if (s.x < -80 || s.x > C.CANVAS_W + 80 || s.y < -80 || s.y > C.CANVAS_H + 80) return;
 
-        const color = C.COLOR.CAR[car.colorIdx];
+        const color = (car.color != null) ? car.color : (car.colorIdx != null && C.COLOR.CAR[car.colorIdx] ? C.COLOR.CAR[car.colorIdx] : '#00f5ff');
         const z = camera.zoom != null ? camera.zoom : 1;
         const W = 24 * z;
         const H = 42 * z;
@@ -538,8 +536,10 @@ NeonDelivery.Renderer = (function () {
         ctx.save();
         ctx.translate(s.x, s.y);
         
-        // Face correct direction based on axis and speed
-        if (car.axis === 'h') {
+        // Face correct direction based on angle or axis
+        if (car.angle != null) {
+            ctx.rotate(car.angle + Math.PI / 2);
+        } else if (car.axis === 'h') {
             ctx.rotate(car.spd > 0 ? Math.PI / 2 : -Math.PI / 2);
         } else {
             ctx.rotate(car.spd > 0 ? Math.PI : 0);
@@ -675,6 +675,21 @@ NeonDelivery.Renderer = (function () {
         ctx.fillRect(-W*0.56, -H*0.10, W*0.12, H*0.07);
         ctx.fillRect( W*0.44, -H*0.10, W*0.12, H*0.07);
 
+        // ── Boost Flame ────────────────────────────────────────
+        if (car.boosting) {
+            const flameLen = 12 + Math.random() * 8;
+            const grad = ctx.createLinearGradient(0, H * 0.45, 0, H * 0.45 + flameLen);
+            grad.addColorStop(0, '#00ffcc');
+            grad.addColorStop(1, 'rgba(0,255,200,0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.moveTo(-W * 0.25, H * 0.45);
+            ctx.lineTo(W * 0.25, H * 0.45);
+            ctx.lineTo(0, H * 0.45 + flameLen);
+            ctx.closePath();
+            ctx.fill();
+        }
+
         ctx.restore();
     }
 
@@ -682,7 +697,7 @@ NeonDelivery.Renderer = (function () {
     // ── Police car ───────────────────────────────────────────
     function drawPolice(ctx, camera, p) {
         const s = camera.worldToScreen(p.x, p.y);
-        if (s.x < -80 || s.x > CW + 80 || s.y < -80 || s.y > CH + 80) return;
+        if (s.x < -80 || s.x > C.CANVAS_W + 80 || s.y < -80 || s.y > C.CANVAS_H + 80) return;
 
         const chasing = p.state === 'chase';
         const z = camera.zoom != null ? camera.zoom : 1;
@@ -881,6 +896,7 @@ NeonDelivery.Renderer = (function () {
     // ── Drone ────────────────────────────────────────────────
 
     function drawDrone(ctx, camera, drone) {
+        if (!drone || drone.visible === false) return;
         const s = camera.worldToScreen(drone.x, drone.y);
 
         ctx.save();
@@ -1013,12 +1029,23 @@ NeonDelivery.Renderer = (function () {
         const { score, combo, levelTimer, level, comboColor } = uiData;
 
         // ── Top bar ──────────────────────────────────────────
-        // Background strip
-        ctx.fillStyle = 'rgba(2,8,16,0.82)';
-        ctx.fillRect(0, 0, CW, 36);
+        const topY = 12; // Mobile notch padding
+        // Background strip with gradient fade
+        ctx.fillStyle = 'rgba(2,8,16,0.85)';
+        ctx.fillRect(0, 0, C.CANVAS_W, 36 + topY);
+        
+        const grad = ctx.createLinearGradient(0, 36 + topY, 0, 36 + topY + 24);
+        grad.addColorStop(0, 'rgba(2,8,16,0.85)');
+        grad.addColorStop(1, 'rgba(2,8,16,0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 36 + topY, C.CANVAS_W, 24);
+
         ctx.strokeStyle = 'rgba(0,245,255,0.2)';
         ctx.lineWidth   = 1;
-        ctx.strokeRect(0, 0, CW, 36);
+        ctx.beginPath();
+        ctx.moveTo(0, 36 + topY);
+        ctx.lineTo(C.CANVAS_W, 36 + topY);
+        ctx.stroke();
 
         // Score
         ctx.font      = 'bold 16px Orbitron';
@@ -1026,7 +1053,7 @@ NeonDelivery.Renderer = (function () {
         ctx.textAlign = 'left';
         ctx.shadowBlur  = 8;
         ctx.shadowColor = C.COLOR.CYAN;
-        ctx.fillText('SCORE ' + score.toLocaleString(), 14, 24);
+        ctx.fillText('SCORE ' + score.toLocaleString(), 14, 24 + topY);
 
         // Combo
         ctx.textAlign = 'center';
@@ -1036,12 +1063,12 @@ NeonDelivery.Renderer = (function () {
             ctx.fillStyle    = cc;
             ctx.shadowColor  = cc;
             ctx.shadowBlur   = combo >= 5 ? 20 : 10;
-            ctx.fillText('⚡ x' + combo, CW / 2, 24);
+            ctx.fillText('⚡ x' + combo, C.CANVAS_W / 2, 24 + topY);
         } else {
             ctx.font         = '12px Rajdhani';
             ctx.fillStyle    = 'rgba(0,245,255,0.4)';
             ctx.shadowBlur   = 0;
-            ctx.fillText('COMBO x1', CW / 2, 24);
+            ctx.fillText('COMBO x1', C.CANVAS_W / 2, 24 + topY);
         }
 
         // Level
@@ -1049,7 +1076,7 @@ NeonDelivery.Renderer = (function () {
         ctx.font         = '12px Rajdhani';
         ctx.fillStyle    = 'rgba(0,245,255,0.6)';
         ctx.shadowBlur   = 0;
-        ctx.fillText('LVL ' + level, CW - 100, 20);
+        ctx.fillText('LVL ' + level, C.CANVAS_W - 100, 20 + topY);
 
         // Timer
         const secs     = Math.ceil(levelTimer / 1000);
@@ -1058,13 +1085,13 @@ NeonDelivery.Renderer = (function () {
         ctx.fillStyle    = timerClr;
         ctx.shadowBlur   = secs <= 10 ? 15 : 6;
         ctx.shadowColor  = timerClr;
-        ctx.fillText(String(secs).padStart(2,'0') + 's', CW - 14, 26);
+        ctx.fillText(String(secs).padStart(2,'0') + 's', C.CANVAS_W - 14, 26 + topY);
 
         // ── Deliveries progress ──────────────────────────────
         const dComp = entities.deliveriesCompleted;
         const dReq  = entities.deliveriesRequired;
         const bx    = 14;
-        const by    = 44;
+        const by    = 44 + topY;
         ctx.font      = '10px Rajdhani';
         ctx.fillStyle = 'rgba(0,245,255,0.5)';
         ctx.textAlign = 'left';
@@ -1081,7 +1108,7 @@ NeonDelivery.Renderer = (function () {
 
         // ── Boost bar ────────────────────────────────────────
         const bBarX  = 14;
-        const bBarY  = CH - 28;
+        const bBarY  = C.CANVAS_H - 28;
         const bBarW  = 120;
         const bBarH  = 8;
         const coolPct = drone.boostCoolTimer > 0
@@ -1168,8 +1195,8 @@ NeonDelivery.Renderer = (function () {
         if (dist < 50) return; // close enough — delivery zone is visible
 
         const ang  = Math.atan2(dy, dx);
-        const cx   = CW / 2;
-        const cy   = CH / 2;
+        const cx   = C.CANVAS_W / 2;
+        const cy   = C.CANVAS_H / 2;
         const aLen = 55; // distance from centre to arrow tip
         const ax   = cx + Math.cos(ang) * aLen;
         const ay   = cy + Math.sin(ang) * aLen;
@@ -1214,11 +1241,11 @@ NeonDelivery.Renderer = (function () {
 
     // ── Minimap ──────────────────────────────────────────────
 
-    function drawMinimap(ctx, camera, drone, entities) {
+    function drawMinimap(ctx, camera, drone, entities, gameData) {
         const MW = C.MINIMAP_W;
         const MH = C.MINIMAP_H;
-        const MX = CW - MW - C.MINIMAP_X;
-        const MY = CH - MH - C.MINIMAP_Y;
+        const MX = C.CANVAS_W - MW - C.MINIMAP_X;
+        const MY = C.CANVAS_H - MH - C.MINIMAP_Y;
         const scale = MW / WS;
 
         // BG
@@ -1231,7 +1258,8 @@ NeonDelivery.Renderer = (function () {
         // Roads (horizontal + vertical lines)
         ctx.strokeStyle = 'rgba(0,245,255,0.12)';
         ctx.lineWidth   = 2;
-        for (const rc of C.ROAD_CENTERS) {
+        const centers = (worldRef && worldRef.roadCenters) ? worldRef.roadCenters : C.ROAD_CENTERS;
+        for (const rc of centers) {
             const px2 = MX + rc * C.TILE_SIZE * scale;
             const py2 = MY + rc * C.TILE_SIZE * scale;
             ctx.beginPath();
@@ -1273,13 +1301,26 @@ NeonDelivery.Renderer = (function () {
             ctx.fill();
         }
 
-        // Drone dot
-        ctx.fillStyle   = C.COLOR.DRONE;
-        ctx.shadowBlur  = 8;
-        ctx.shadowColor = C.COLOR.DRONE;
-        ctx.beginPath();
-        ctx.arc(MX + drone.x * scale, MY + drone.y * scale, 3, 0, Math.PI * 2);
-        ctx.fill();
+        // Multiplayer dots
+        if (gameData && gameData.players) {
+            for (const p of gameData.players) {
+                if (!p.alive) continue;
+                ctx.fillStyle   = (p.id === NeonDelivery.Network.localId) ? '#00f5ff' : '#ff3366';
+                ctx.shadowBlur  = (p.id === NeonDelivery.Network.localId) ? 8 : 4;
+                ctx.shadowColor = ctx.fillStyle;
+                ctx.beginPath();
+                ctx.arc(MX + p.x * scale, MY + p.y * scale, 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        } else if (drone) {
+            // Drone dot (Solo mode)
+            ctx.fillStyle   = C.COLOR.DRONE;
+            ctx.shadowBlur  = 8;
+            ctx.shadowColor = C.COLOR.DRONE;
+            ctx.beginPath();
+            ctx.arc(MX + drone.x * scale, MY + drone.y * scale, 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
         ctx.shadowBlur = 0;
 
         // Label
@@ -1297,20 +1338,20 @@ NeonDelivery.Renderer = (function () {
         if (eventState.type === 'thunderstorm') {
             // Rain tint
             ctx.fillStyle = 'rgba(30,50,120,0.15)';
-            ctx.fillRect(0, 0, CW, CH);
+            ctx.fillRect(0, 0, C.CANVAS_W, C.CANVAS_H);
 
             // Lightning
             if (eventState.data && eventState.data.lightning > 0) {
                 const frac = eventState.data.lightning / 180;
                 ctx.fillStyle = `rgba(200,220,255,${0.35 * frac})`;
-                ctx.fillRect(0, 0, CW, CH);
+                ctx.fillRect(0, 0, C.CANVAS_W, C.CANVAS_H);
             }
         }
 
         if (eventState.type === 'wind') {
             // Subtle blue tint
             ctx.fillStyle = 'rgba(0,80,200,0.06)';
-            ctx.fillRect(0, 0, CW, CH);
+            ctx.fillRect(0, 0, C.CANVAS_W, C.CANVAS_H);
         }
     }
 
@@ -1324,7 +1365,7 @@ NeonDelivery.Renderer = (function () {
 
         // Dark mask
         ctx.fillStyle = `rgba(0,0,0,${0.88 + 0.08 * progress})`;
-        ctx.fillRect(0, 0, CW, CH);
+        ctx.fillRect(0, 0, C.CANVAS_W, C.CANVAS_H);
 
         // Cut out spotlight using composite
         ctx.globalCompositeOperation = 'destination-out';
@@ -1401,5 +1442,5 @@ NeonDelivery.Renderer = (function () {
     }
 
     // ── Public ───────────────────────────────────────────────
-    return { init, prerenderWorld, render, damageAt };
+    return { init, prerenderWorld, render, damageAt, drawDrone, drawCar };
 })();

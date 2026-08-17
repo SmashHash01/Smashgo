@@ -1,313 +1,163 @@
 // ============================================================
 //  NEON DELIVERY — main.js
-//  Game loop, state machine, scoring, and orchestration.
+//  Bootstraps the application, manages global UI routing,
+//  and acts as a facade for the active game mode.
 // ============================================================
 NeonDelivery.Game = (function () {
-    const C  = NeonDelivery.Config;
+    const C = NeonDelivery.Config;
     const GS = C.GameState;
+    let saveData = null;
 
-    // ── State ────────────────────────────────────────────────
-    let state        = GS.MENU;
-    let level        = 1;
-    let score        = 0;
-    let sessionCoins = 0;
-    let combo        = 1;
-    let maxCombo     = 1;
-    let levelTimer   = 60000;   // ms remaining
-    let deliveriesThisLevel = 0;
-    let saveData     = null;
+    let activeMode = null; // 'solo' or 'multiplayer'
 
-    // ── Last frame time ──────────────────────────────────────
-    let lastTime    = 0;
-    let rafId       = null;
-    let timerWarned = false;
-
-    // ── Canvas ───────────────────────────────────────────────
-    let canvas = null;
-
-    // ══════════════════════════════════════════════════════════
-    //  Bootstrap
-    // ══════════════════════════════════════════════════════════
     function init() {
-        canvas = document.getElementById('game-canvas');
+        const canvas = document.getElementById('game-canvas');
         canvas.width  = C.CANVAS_W;
         canvas.height = C.CANVAS_H;
 
-        // Responsive scaling
         applyCanvasScale();
         window.addEventListener('resize', applyCanvasScale);
 
-        // Sub-system inits
         saveData = NeonDelivery.Storage.load();
         NeonDelivery.Audio.init(saveData.settings.muted);
         NeonDelivery.Input.init();
         NeonDelivery.Renderer.init(canvas);
         NeonDelivery.UI.init();
-
         NeonDelivery.UI.updateMuteBtn(NeonDelivery.Audio.isMuted());
+        NeonDelivery.Network.init();
 
-        // Button wiring
+        bindUI();
+
+        document.addEventListener('click',     () => NeonDelivery.Audio.resume(), { once: true });
+        
+        // Ensure fullscreen is captured when interacting (especially after rotating phone)
+        document.addEventListener('touchstart', () => {
+            NeonDelivery.Audio.resume();
+            if (window.innerWidth > window.innerHeight) {
+                tryEnterMobileLandscape();
+            }
+        }, { passive: true });
+
+        NeonDelivery.UI.showMenu(saveData);
+    }
+
+    function applyCanvasScale() {
+        const winW = Math.max(1, window.innerWidth);
+        const winH = Math.max(1, window.innerHeight);
+
+        // Keep the viewport aspect ratio but cap the internal pixel count.
+        // The old `640 * (winW / winH)` rule could create absurdly wide
+        // canvases when browser chrome/devtools made winH temporarily tiny.
+        const MAX_RENDER_PIXELS = 1280 * 720;
+        const scale = Math.min(1, Math.sqrt(MAX_RENDER_PIXELS / (winW * winH)));
+        C.CANVAS_W = Math.max(320, Math.round(winW * scale));
+        C.CANVAS_H = Math.max(240, Math.round(winH * scale));
+
+        const canvas = document.getElementById('game-canvas');
+        if (canvas.width !== C.CANVAS_W) canvas.width = C.CANVAS_W;
+        if (canvas.height !== C.CANVAS_H) canvas.height = C.CANVAS_H;
+        canvas.style.width = '100vw';
+        canvas.style.height = '100vh';
+    }
+
+    function tryEnterMobileLandscape() {
+        if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+            try {
+                if (document.documentElement.requestFullscreen) {
+                    document.documentElement.requestFullscreen().catch(()=>{});
+                } else if (document.documentElement.webkitRequestFullscreen) {
+                    document.documentElement.webkitRequestFullscreen();
+                }
+            } catch (e) {}
+            
+            try {
+                if (screen.orientation && screen.orientation.lock) {
+                    screen.orientation.lock('landscape').catch(()=>{});
+                }
+            } catch (e) {}
+        }
+    }
+
+    function bindUI() {
         NeonDelivery.UI.bindButtons({
-            onStart:     () => startGame(1),
-            onResume:    () => setState(GS.PLAYING),
-            onQuit:      () => { setState(GS.MENU); NeonDelivery.UI.showMenu(saveData); },
-            onNextLevel: () => startGame(level + 1),
-            onRetry:     () => startGame(level),
-            onMenu:      () => { setState(GS.MENU); NeonDelivery.UI.showMenu(saveData); },
+            // Solo Flow
+            onPlaySolo: () => {
+                tryEnterMobileLandscape();
+                activeMode = 'solo';
+                NeonDelivery.Solo.initMode(saveData);
+                NeonDelivery.Solo.startGame(1);
+            },
+            onResume:    () => { if (activeMode === 'solo') NeonDelivery.Solo.setState(GS.PLAYING); },
+            onQuit:      () => { if (activeMode === 'solo') NeonDelivery.Solo.quitToMenu(); },
+            onNextLevel: () => { if (activeMode === 'solo') NeonDelivery.Solo.startGame(NeonDelivery.Solo.level + 1); },
+            onRetry:     () => { if (activeMode === 'solo') NeonDelivery.Solo.startGame(NeonDelivery.Solo.level); },
+            onMenu:      () => { if (activeMode === 'solo') NeonDelivery.Solo.quitToMenu(); },
             onMute:      () => {
                 const newVal = !NeonDelivery.Audio.isMuted();
                 NeonDelivery.Audio.setMuted(newVal);
                 saveData.settings.muted = newVal;
                 NeonDelivery.Storage.save(saveData);
                 NeonDelivery.UI.updateMuteBtn(newVal);
-            }
-        });
+            },
 
-        // Unlock audio on first interaction
-        document.addEventListener('click',     () => NeonDelivery.Audio.resume(), { once: true });
-        document.addEventListener('touchstart', () => NeonDelivery.Audio.resume(), { once: true });
-
-        // Show menu
-        NeonDelivery.UI.showMenu(saveData);
-        setState(GS.MENU);
-        startLoop();
-    }
-
-    // ── Responsive canvas ────────────────────────────────────
-    function applyCanvasScale() {
-        const scaleX = window.innerWidth  / C.CANVAS_W;
-        const scaleY = window.innerHeight / C.CANVAS_H;
-        const scale  = Math.min(scaleX, scaleY);
-        canvas.style.width  = (C.CANVAS_W * scale) + 'px';
-        canvas.style.height = (C.CANVAS_H * scale) + 'px';
-    }
-
-    // ══════════════════════════════════════════════════════════
-    //  Game flow
-    // ══════════════════════════════════════════════════════════
-    function startGame(lvl) {
-        // Immediately dismiss any active overlay
-        NeonDelivery.UI.hideAll();
-
-        level        = lvl;
-        score        = 0;
-        sessionCoins = 0;
-        combo        = 1;
-        maxCombo     = 1;
-        timerWarned  = false;
-        deliveriesThisLevel = 0;
-
-        const lcfg = C.getLevelConfig(level);
-        levelTimer = lcfg.timer * 1000;
-
-
-        // Generate world
-        const worldData = NeonDelivery.World.generate(level);
-        NeonDelivery.Renderer.prerenderWorld(NeonDelivery.World);
-
-        // Pick drone start on a road spawn point
-        const start = NeonDelivery.World.getRandomSpawnPoint() ||
-                      { x: C.WORLD_SIZE/2, y: C.WORLD_SIZE/2 };
-
-        NeonDelivery.Drone.init(start.x, start.y, saveData.ownedUpgrades);
-        NeonDelivery.Camera.init(start.x, start.y);
-        NeonDelivery.Particles.clear();
-        NeonDelivery.Entities.init(NeonDelivery.World, lcfg);
-        NeonDelivery.Events.init(level);
-
-        setState(GS.PLAYING);
-        NeonDelivery.UI.hidePause();
-    }
-
-    // ── State machine ────────────────────────────────────────
-    function setState(newState) {
-        state = newState;
-        if (newState === GS.PAUSED) {
-            NeonDelivery.UI.showPause();
-        } else {
-            NeonDelivery.UI.hidePause();
-        }
-    }
-
-    function getState() { return state; }
-
-    // ══════════════════════════════════════════════════════════
-    //  Game loop
-    // ══════════════════════════════════════════════════════════
-    function startLoop() {
-        lastTime = performance.now();
-        rafId    = requestAnimationFrame(loop);
-    }
-
-    function loop(now) {
-        rafId = requestAnimationFrame(loop);
-        const rawDt = now - lastTime;
-        lastTime    = now;
-        // Cap dt to avoid huge jumps after tab blur
-        const dt = Math.min(rawDt, 50);
-
-        try {
-            update(dt);
-            render(dt);
-        } catch (err) {
-            // Log the error but keep the loop alive so one bad frame
-            // doesn't freeze the game permanently.
-            console.error('[NeonDelivery] frame error:', err);
-        }
-    }
-
-    // ── Update ───────────────────────────────────────────────
-    function update(dt) {
-        // Pause toggle (always check)
-        if (state === GS.PLAYING && NeonDelivery.Input.isPause()) {
-            setState(GS.PAUSED);
-            return;
-        }
-        if (state === GS.PAUSED && NeonDelivery.Input.isPause()) {
-            setState(GS.PLAYING);
-            return;
-        }
-
-        if (state !== GS.PLAYING) return;
-
-        // Level timer
-        levelTimer -= dt;
-
-        // 10-second warning
-        if (!timerWarned && levelTimer <= 10000) {
-            timerWarned = true;
-            NeonDelivery.Audio.warning();
-        }
-
-        if (levelTimer <= 0) {
-            triggerGameOver();
-            return;
-        }
-
-        // Subsystems
-        const eventState = NeonDelivery.Events.getState();
-        NeonDelivery.Drone.update(dt, NeonDelivery.Input, NeonDelivery.World, eventState, NeonDelivery.Camera);
-        NeonDelivery.Camera.update(NeonDelivery.Drone.x, NeonDelivery.Drone.y, dt);
-        NeonDelivery.Entities.update(dt, NeonDelivery.Drone, NeonDelivery.World);
-        NeonDelivery.Particles.update(dt);
-        NeonDelivery.Events.update(dt);
-
-        // Check level completion
-        if (NeonDelivery.Entities.deliveriesCompleted >= NeonDelivery.Entities.deliveriesRequired) {
-            onLevelComplete();
-        }
-
-        // Update HUD
-        NeonDelivery.UI.updateHUD(score, combo, levelTimer, level);
-    }
-
-    // ── Render ───────────────────────────────────────────────
-    function render(dt) {
-        NeonDelivery.Renderer.render(dt, {
-            world:      NeonDelivery.World,
-            drone:      NeonDelivery.Drone,
-            entities:   NeonDelivery.Entities,
-            camera:     NeonDelivery.Camera,
-            eventState: NeonDelivery.Events.getState(),
-            gameState:  state,
-            uiData:     NeonDelivery.UI.hudData
+            // Multiplayer Nav
+            onShowCreateRoom: () => NeonDelivery.UI.showCreateRoom(),
+            onShowJoinRoom:   () => NeonDelivery.UI.showJoinRoom(),
+            onCancelCreate:   () => NeonDelivery.UI.showMenu(saveData),
+            onCancelJoin:     () => NeonDelivery.UI.showMenu(saveData),
+            
+            // Multiplayer Actions
+            onCreateRoom: (username) => {
+                if (!username.trim()) return alert("Enter a username");
+                NeonDelivery.Network.createRoom(username, (res) => {
+                    if (res.success) {
+                        activeMode = 'multiplayer';
+                        NeonDelivery.Multiplayer.onRoomStateUpdate(res.roomState);
+                    }
+                });
+            },
+            onJoinRoom: (username, roomCode) => {
+                if (!username.trim() || !roomCode.trim()) return alert("Enter username and room code");
+                NeonDelivery.Network.joinRoom(username, roomCode, (res) => {
+                    if (res.success) {
+                        activeMode = 'multiplayer';
+                        NeonDelivery.Multiplayer.onRoomStateUpdate(res.roomState);
+                    } else {
+                        alert(res.message);
+                    }
+                });
+            },
+            onLobbyReady: () => NeonDelivery.Multiplayer.toggleReady(),
+            onMatchLengthChange: (mins) => NeonDelivery.Multiplayer.setMatchLength(mins),
+            onLobbyStart: () => {
+                tryEnterMobileLandscape();
+                NeonDelivery.Multiplayer.startMatch();
+            },
+            onLobbyLeave: () => NeonDelivery.Multiplayer.leaveRoom(),
+            onMpRematch: () => NeonDelivery.Multiplayer.leaveRoom(),
+            onMpLeave: () => NeonDelivery.Multiplayer.leaveRoom()
         });
     }
 
-    // ══════════════════════════════════════════════════════════
-    //  Delivery / scoring
-    // ══════════════════════════════════════════════════════════
+    // ── Facade API for other systems (Drone, Entities, Events) ──
     function onDelivery(job) {
-        deliveriesThisLevel++;
-
-        // Time bonus: seconds remaining on the level timer (not delivery-specific)
-        const secsLeft  = levelTimer / 1000;
-        const timeBonus = Math.round(secsLeft * C.SCORE_TIME_BONUS);
-
-        // Clean bonus
-        const cleanBonus = NeonDelivery.Drone.cleanRun ? C.SCORE_CLEAN_BONUS : 0;
-        NeonDelivery.Drone.resetCleanRun && NeonDelivery.Drone.resetCleanRun();
-
-        // VIP / Express multipliers
-        const typeMultiplier =
-            job.type === C.JOB_TYPE.VIP     ? C.VIP_MULTIPLIER :
-            job.type === C.JOB_TYPE.EXPRESS  ? C.EXPRESS_MULTIPLIER : 1;
-
-        // Combo
-        combo = Math.min(combo + 1, C.MAX_COMBO);
-        if (combo > maxCombo) maxCombo = combo;
-
-        if (combo === C.MAX_COMBO) {
-            NeonDelivery.Audio.overdrive();
-            NeonDelivery.UI.flashOverdrive();
-        } else {
-            NeonDelivery.Audio.comboUp();
-        }
-
-        // OVERDRIVE boost cooldown bonus
-        const overdriveBoostMult = combo >= C.MAX_COMBO ? 1.5 : 1;
-
-        const delivery = (C.SCORE_BASE + timeBonus + cleanBonus) * typeMultiplier * combo;
-        score        += delivery;
-        sessionCoins += Math.round(job.baseCoins * combo * 0.5);
-
-
-        levelTimer +=5000;
-
-        // Extra timer on delivery (clock hack upgrade)
-        if (NeonDelivery.Drone.extraDeliveryTime > 0) {
-            levelTimer += NeonDelivery.Drone.extraDeliveryTime * 1000;
-        }
-
-        // Coin particles
-        NeonDelivery.Particles.emit('coin', NeonDelivery.Drone.x, NeonDelivery.Drone.y, 3);
-
-        timerWarned = false; // reset warning so it can fire again after refill
+        if (activeMode === 'solo') NeonDelivery.Solo.onDelivery(job);
     }
-
-    // ── Level complete ───────────────────────────────────────
-    function onLevelComplete() {
-        setState(GS.LEVEL_COMPLETE);
-
-        // Persist scores
-        const coinsEarned = sessionCoins;
-        saveData.totalCoins += coinsEarned;
-        if (score > saveData.highScore) saveData.highScore = Math.round(score);
-        if (level > saveData.bestLevel)  saveData.bestLevel  = level;
-        NeonDelivery.Storage.save(saveData);
-
-        NeonDelivery.UI.showLevelComplete({
-            level,
-            deliveries: NeonDelivery.Entities.deliveriesCompleted,
-            score:      Math.round(score),
-            coins:      coinsEarned
-        });
-    }
-
-    // ── Game over ────────────────────────────────────────────
+    
     function triggerGameOver() {
-        if (state === GS.GAMEOVER) return;
-        setState(GS.GAMEOVER);
-
-        if (score > saveData.highScore) saveData.highScore = Math.round(score);
-        NeonDelivery.Storage.save(saveData);
-
-        NeonDelivery.Particles.emit('explosion', NeonDelivery.Drone.x, NeonDelivery.Drone.y, 24);
-
-        NeonDelivery.UI.showGameOver({
-            score:    Math.round(score),
-            highScore: saveData.highScore,
-            level,
-            maxCombo
-        });
+        if (activeMode === 'solo') NeonDelivery.Solo.triggerGameOver();
     }
-
-    // ── Collision reset (combo break) ────────────────────────
+    
     function onCollision() {
-        combo = 1;
+        if (activeMode === 'solo') NeonDelivery.Solo.onCollision();
     }
 
-    return { init, startGame, setState, getState, onDelivery, triggerGameOver, onCollision };
+    function getState() {
+        if (activeMode === 'solo') return NeonDelivery.Solo.getState();
+        return GS.PLAYING; // Default stub for MP
+    }
+
+    return { init, onDelivery, triggerGameOver, onCollision, getState };
 })();
 
 // ── Boot ────────────────────────────────────────────────────

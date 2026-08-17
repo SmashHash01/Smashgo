@@ -28,10 +28,16 @@
                 <div id="joystick-knob"></div>
             </div>
         </div>
-        <button id="boost-btn" aria-label="Boost">
-            <span>⚡</span>
-            <small>BOOST</small>
-        </button>
+        <div id="touch-action-buttons">
+            <button id="fire-btn" class="touch-btn touch-fire" aria-label="Shoot">
+                <span class="btn-icon">💥</span>
+                <span class="btn-label">SHOOT</span>
+            </button>
+            <button id="boost-btn" class="touch-btn touch-boost" aria-label="Boost">
+                <span class="btn-icon">⚡</span>
+                <span class="btn-label">BOOST</span>
+            </button>
+        </div>
     </div>
 
     <!-- ── Overlay container ────────────────────────────────── -->
@@ -44,34 +50,105 @@
             <div class="overlay-content">
                 <!-- Logo -->
                 <div class="game-logo">
-                    <div class="logo-line-1">NEON</div>
-                    <div class="logo-line-2">DELIVERY</div>
-                    <div class="logo-tagline">Cyberpunk Drone Courier</div>
+                    <div class="logo-line-1">SMASHGO</div>
+                    <div class="logo-line-2">ARENA</div>
+                    <div class="logo-tagline">Cyberpunk Delivery & Combat</div>
                 </div>
 
-                <!-- Stats -->
-                <div class="menu-stats">
-                    <div class="stat-card">
-                        <div class="stat-label">High Score</div>
-                        <div class="stat-value" id="menu-high-score">0</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">Best Level</div>
-                        <div class="stat-value" id="menu-best-level">1</div>
-                    </div>
+                <div class="menu-modes">
+                    <button class="btn-primary" id="btn-play-solo">PLAY SOLO</button>
+                    <button class="btn-secondary" id="btn-show-create-room">CREATE ROOM</button>
+                    <button class="btn-secondary" id="btn-show-join-room">JOIN ROOM</button>
                 </div>
-
-                <!-- Start button -->
-                <button class="btn-primary" id="btn-start">START MISSION</button>
 
                 <!-- Controls hint -->
                 <div class="controls-hint">
                     <span>WASD / ARROWS — Move &nbsp;|&nbsp; SPACE — Boost</span>
-                    <span>Fly to 📦 to pick up &nbsp;|&nbsp; Fly to ◎ to deliver</span>
-                    <span>P / ESC — Pause</span>
                 </div>
             </div>
             <div class="scanline-overlay"></div>
+        </div>
+
+        <!-- ┌─────────────────────────────────────────────────────────┐ -->
+        <!-- │  CREATE ROOM                                            │ -->
+        <!-- └─────────────────────────────────────────────────────────┘ -->
+        <div id="create-room-overlay" class="overlay" role="dialog" aria-label="Create room">
+            <div class="overlay-content compact">
+                <h2 class="overlay-title">CREATE ROOM</h2>
+                <div class="input-group">
+                    <label>Username</label>
+                    <input type="text" id="cr-username" placeholder="Enter username" maxlength="12">
+                </div>
+                <button class="btn-primary" id="btn-create-room">CREATE</button>
+                <button class="btn-secondary" id="btn-cancel-create">CANCEL</button>
+            </div>
+        </div>
+
+        <!-- ┌─────────────────────────────────────────────────────────┐ -->
+        <!-- │  JOIN ROOM                                              │ -->
+        <!-- └─────────────────────────────────────────────────────────┘ -->
+        <div id="join-room-overlay" class="overlay" role="dialog" aria-label="Join room">
+            <div class="overlay-content compact">
+                <h2 class="overlay-title">JOIN ROOM</h2>
+                <div class="input-group">
+                    <label>Username</label>
+                    <input type="text" id="jr-username" placeholder="Enter username" maxlength="12">
+                </div>
+                <div class="input-group">
+                    <label>Room Code</label>
+                    <input type="text" id="jr-roomcode" placeholder="6-character code" maxlength="6" style="text-transform: uppercase;">
+                </div>
+                <button class="btn-primary" id="btn-join-room">JOIN</button>
+                <button class="btn-secondary" id="btn-cancel-join">CANCEL</button>
+            </div>
+        </div>
+
+        <!-- ┌─────────────────────────────────────────────────────────┐ -->
+        <!-- │  LOBBY                                                  │ -->
+        <!-- └─────────────────────────────────────────────────────────┘ -->
+        <div id="lobby-overlay" class="overlay" role="dialog" aria-label="Multiplayer Lobby">
+            <div class="overlay-content">
+                <div class="level-badge">ROOM: <span id="lobby-room-code">XXXXXX</span></div>
+                <div class="lobby-columns">
+                    <div class="lobby-players">
+                        <h3>PLAYERS (<span id="lobby-player-count">1</span>/8)</h3>
+                        <ul id="lobby-player-list">
+                            <!-- Populated via JS -->
+                        </ul>
+                    </div>
+                    <div class="lobby-settings" id="lobby-settings-panel">
+                        <h3>MATCH LENGTH</h3>
+                        <div class="setting-buttons" id="match-length-btns">
+                            <button class="btn-setting" data-min="3">3 MIN</button>
+                            <button class="btn-setting active" data-min="5">5 MIN</button>
+                            <button class="btn-setting" data-min="8">8 MIN</button>
+                            <button class="btn-setting" data-min="10">10 MIN</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="lobby-actions">
+                    <button class="btn-primary" id="btn-lobby-ready">READY</button>
+                    <button class="btn-secondary" id="btn-lobby-start" style="display:none;">START MATCH</button>
+                    <button class="btn-secondary" id="btn-lobby-leave">LEAVE ROOM</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ┌─────────────────────────────────────────────────────────┐ -->
+        <!-- │  MULTIPLAYER RESULTS                                    │ -->
+        <!-- └─────────────────────────────────────────────────────────┘ -->
+        <div id="mp-results-overlay" class="overlay" role="dialog" aria-label="Match Over">
+            <div class="overlay-content">
+                <div class="gameover-title">MATCH OVER</div>
+                <div class="gameover-sub"><span id="mp-results-timer">5</span> MIN MATCH</div>
+                <div class="mp-rankings" id="mp-rankings-list">
+                    <!-- Populated via JS -->
+                </div>
+                <div class="go-buttons">
+                    <button class="btn-primary" id="btn-mp-rematch">REMATCH</button>
+                    <button class="btn-secondary" id="btn-mp-leave">LEAVE</button>
+                </div>
+            </div>
         </div>
 
         <!-- ┌─────────────────────────────────────────────────────────┐ -->
@@ -156,10 +233,23 @@
             </div>
         </div>
 
+        <!-- ┌─────────────────────────────────────────────────────────┐ -->
+        <!-- │  ROTATE OVERLAY (Portrait Mobile)                       │ -->
+        <!-- └─────────────────────────────────────────────────────────┘ -->
+        <div id="rotate-overlay" class="overlay" role="dialog" aria-label="Rotate device">
+            <div class="overlay-content compact">
+                <div class="od-icon" style="font-size: 40px; margin-bottom: 10px;">📱</div>
+                <h2 class="overlay-title" style="margin-bottom: 10px;">ROTATE DEVICE</h2>
+                <div style="font-size: 14px; color: rgba(0,245,255,0.7);">Please rotate your phone to landscape mode to play.</div>
+            </div>
+        </div>
+
     </div><!-- /overlay-container -->
 </div><!-- /game-container -->
 
 <!-- ── Scripts — load order is dependency order ─────────────── -->
+<script src="/socket.io/socket.io.js"></script>
+<script src="src/shared/gameplay.js"></script>
 <script src="src/config.js"></script>
 <script src="src/storage.js"></script>
 <script src="src/input.js"></script>
@@ -173,6 +263,14 @@
 <script src="src/events.js"></script>
 <script src="src/renderer.js"></script>
 <script src="src/ui.js"></script>
+
+<!-- Modes -->
+<script src="src/modes/solo.js"></script>
+<script src="src/multiplayer/network.js"></script>
+<script src="src/multiplayer/combatVisuals.js"></script>
+<script src="src/modes/multiplayer.js"></script>
+
+<!-- Main Entry -->
 <script src="src/main.js"></script>
 
 </body>

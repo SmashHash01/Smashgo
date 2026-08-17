@@ -24,9 +24,14 @@ NeonDelivery.Input = (function () {
     let boostJustPressed = false;
     let spaceHeld        = false;   // true while Space is held
 
-    // Mobile boost tap edge
     let boostTouchJustPressed = false;
     let boostTouched          = false;
+
+    // Shoot edge detection
+    let shootJustPressed      = false;
+    let shootTouchJustPressed = false;
+    let shootHeld             = false;
+    let shootTouched          = false;
 
     // ── Virtual joystick (mobile) ─────────────────────────────
     const joystick = { dx: 0, dy: 0, active: false };
@@ -47,6 +52,10 @@ NeonDelivery.Input = (function () {
                 boostJustPressed = true;
                 spaceHeld = true;
             }
+            if (['ShiftLeft', 'ShiftRight', 'KeyX', 'KeyF', 'KeyJ', 'KeyK', 'KeyE', 'KeyC', 'Enter'].includes(e.code)) {
+                shootHeld = true;
+                if (!e.repeat) shootJustPressed = true;
+            }
 
             if (['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) {
                 e.preventDefault();
@@ -56,6 +65,27 @@ NeonDelivery.Input = (function () {
         window.addEventListener('keyup', e => {
             keys[e.code] = false;
             if (e.code === 'Space') spaceHeld = false;
+            if (['ShiftLeft', 'ShiftRight', 'KeyX', 'KeyF', 'KeyJ', 'KeyK', 'KeyE', 'KeyC', 'Enter'].includes(e.code)) {
+                shootHeld = false;
+            }
+        });
+
+        // Mouse click shooting (only on active game canvas, not overlay/menus)
+        window.addEventListener('mousedown', e => {
+            if (e.button === 0) {
+                const target = e.target;
+                const isCanvas = target && target.id === 'game-canvas';
+                const inOverlay = target && target.closest('.overlay.active');
+                if (isCanvas && !inOverlay) {
+                    shootHeld = true;
+                    shootJustPressed = true;
+                }
+            }
+        });
+        window.addEventListener('mouseup', e => {
+            if (e.button === 0) {
+                shootHeld = false;
+            }
         });
 
         // Mobile joystick
@@ -78,6 +108,29 @@ NeonDelivery.Input = (function () {
             }, { passive: false });
             boostBtn.addEventListener('touchend',    e => { e.preventDefault(); boostTouched = false; }, { passive: false });
             boostBtn.addEventListener('touchcancel', () => { boostTouched = false; });
+            boostBtn.addEventListener('mousedown', e => {
+                e.preventDefault();
+                boostTouched = true;
+                boostTouchJustPressed = true;
+            });
+            boostBtn.addEventListener('mouseup', () => { boostTouched = false; });
+        }
+
+        const fireBtn = document.getElementById('fire-btn') || document.getElementById('shoot-btn');
+        if (fireBtn) {
+            fireBtn.addEventListener('touchstart', e => {
+                e.preventDefault();
+                shootTouched = true;
+                shootTouchJustPressed = true;
+            }, { passive: false });
+            fireBtn.addEventListener('touchend', e => { e.preventDefault(); shootTouched = false; }, { passive: false });
+            fireBtn.addEventListener('touchcancel', () => { shootTouched = false; });
+            fireBtn.addEventListener('mousedown', e => {
+                e.preventDefault();
+                shootHeld = true;
+                shootJustPressed = true;
+            });
+            fireBtn.addEventListener('mouseup', () => { shootHeld = false; });
         }
     }
 
@@ -160,6 +213,27 @@ NeonDelivery.Input = (function () {
         return false;
     }
 
-    return { init, getMove, isBoost, isBoostPressed, isPause };
+
+    let fireSeq = 0;
+
+    function isShoot() {
+        return !!(shootHeld || shootTouched);
+    }
+
+    function isShootPressed() {
+        const v = shootJustPressed || shootTouchJustPressed;
+        shootJustPressed      = false;
+        shootTouchJustPressed = false;
+        return v;
+    }
+
+    function getFireSeq() {
+        if (isShootPressed()) {
+            fireSeq++;
+        }
+        return fireSeq;
+    }
+
+    return { init, getMove, isBoost, isBoostPressed, isPause, isShoot, isShootPressed, getFireSeq };
 
 })();

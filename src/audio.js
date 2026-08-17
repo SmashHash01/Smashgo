@@ -6,6 +6,11 @@ NeonDelivery.Audio = (function () {
     let ctx   = null;
     let muted = false;
 
+    let sirenOsc = null;
+    let sirenGain = null;
+    let sirenLfo = null;
+    let isSirenPlaying = false;
+
     // ── Init ─────────────────────────────────────────────────
     function init(isMuted) {
         muted = !!isMuted;
@@ -16,7 +21,10 @@ NeonDelivery.Audio = (function () {
         }
     }
 
-    function setMuted(val) { muted = !!val; }
+    function setMuted(val) { 
+        muted = !!val; 
+        if (muted && sirenGain) sirenGain.gain.setTargetAtTime(0, ctx.currentTime, 0.05);
+    }
     function isMuted()     { return muted; }
 
     /** Must be called after a user gesture to un-suspend the AudioContext. */
@@ -170,9 +178,57 @@ NeonDelivery.Audio = (function () {
         osc(660, 'square', 0.08, 0.12);
     }
 
+    // ── Siren Loop ──────────────────────────────────────────
+    function initSiren() {
+        if (!ctx) return;
+        
+        sirenOsc = ctx.createOscillator();
+        sirenGain = ctx.createGain();
+        sirenLfo = ctx.createOscillator();
+        
+        const lfoGain = ctx.createGain();
+        lfoGain.gain.value = 180; // Pitch bend range
+        
+        sirenLfo.frequency.value = 1.2; // Wee-woo speed
+        sirenLfo.connect(lfoGain);
+        lfoGain.connect(sirenOsc.frequency);
+        
+        sirenOsc.type = 'triangle';
+        sirenOsc.frequency.value = 750; // Base freq
+        
+        sirenGain.gain.value = 0; // Silent by default
+        
+        sirenOsc.connect(sirenGain);
+        sirenGain.connect(ctx.destination);
+        
+        sirenOsc.start();
+        sirenLfo.start();
+        isSirenPlaying = true;
+    }
+
+    function updateSiren(distance) {
+        if (!ctx || muted) {
+            if (sirenGain) sirenGain.gain.setTargetAtTime(0, ctx.currentTime, 0.05);
+            return;
+        }
+        if (!isSirenPlaying) initSiren();
+        if (!sirenGain) return;
+        
+        resume();
+
+        const maxDist = NeonDelivery.Config.POLICE_DETECT_RANGE * 1.5;
+        if (distance > maxDist || distance < 0) {
+            sirenGain.gain.setTargetAtTime(0, ctx.currentTime, 0.1);
+        } else {
+            const vol = 0.12 * (1 - (distance / maxDist));
+            sirenGain.gain.setTargetAtTime(vol, ctx.currentTime, 0.1);
+        }
+    }
+
     return {
         init, setMuted, isMuted, resume,
         boost, pickup, delivery, collision, coin, laser,
-        warning, explosion, uiClick, comboUp, overdrive, timerWarning
+        warning, explosion, uiClick, comboUp, overdrive, timerWarning,
+        updateSiren
     };
 })();

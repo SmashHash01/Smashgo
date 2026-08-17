@@ -10,30 +10,30 @@ NeonDelivery.Config = {
     CANVAS_H: 640,
 
     // ── World ───────────────────────────────────────────────
-    TILE_SIZE: 16,
-    WORLD_TILES: 120,
+    TILE_SIZE: NeonDelivery.Gameplay.ARENA.tileSize,
+    WORLD_TILES: NeonDelivery.Gameplay.ARENA.worldTiles,
     get WORLD_SIZE() { return this.TILE_SIZE * this.WORLD_TILES; }, // 1920
 
     // Road centers (tile index).
-    ROAD_CENTERS: [14, 36, 58, 80, 102],
-    ROAD_HALF_TILES: 3,       // road offset from center
-    GRASS_TILES: 2,           // grass strip
-    SIDEWALK_TILES: 1,        // sidewalk strip
+    ROAD_CENTERS: NeonDelivery.Gameplay.ARENA.roadCenters,
+    ROAD_HALF_TILES: NeonDelivery.Gameplay.ARENA.roadHalfTiles,
+    GRASS_TILES: NeonDelivery.Gameplay.ARENA.grassTiles,
+    SIDEWALK_TILES: NeonDelivery.Gameplay.ARENA.sidewalkTiles,
 
     // ── Tile types ──────────────────────────────────────────
     TILE: { EMPTY: 0, ROAD: 1, INTERSECTION: 2, GRASS: 3, SIDEWALK: 4, BUILDING: 5, ALLEY: 6 },
 
-    // ── Drone physics ───────────────────────────────────────
-    DRONE_RADIUS: 10,
-    DRONE_ACCEL: 0.42,
-    DRONE_MAX_SPEED: 4.8,
-    DRONE_FRICTION: 0.86,
-    BOOST_SPEED_MULT: 2.4,
-    BOOST_DURATION: 900,    // ms
-    BOOST_COOLDOWN: 3200,   // ms
+    // ── Drone / Car physics for Solo Mode ───────────────────
+    DRONE_RADIUS: NeonDelivery.Gameplay.SOLO_PHYSICS.DRONE_RADIUS,
+    DRONE_ACCEL: NeonDelivery.Gameplay.SOLO_PHYSICS.DRONE_ACCEL,
+    DRONE_MAX_SPEED: NeonDelivery.Gameplay.SOLO_PHYSICS.DRONE_MAX_SPEED,
+    DRONE_FRICTION: NeonDelivery.Gameplay.SOLO_PHYSICS.DRONE_FRICTION,
+    BOOST_SPEED_MULT: NeonDelivery.Gameplay.SOLO_PHYSICS.BOOST_SPEED_MULT,
+    BOOST_DURATION: NeonDelivery.Gameplay.SOLO_PHYSICS.BOOST_DURATION,
+    BOOST_COOLDOWN: NeonDelivery.Gameplay.SOLO_PHYSICS.BOOST_COOLDOWN,
 
     // ── Camera ──────────────────────────────────────────────
-    CAMERA_LERP: 0.09,
+    CAMERA_LERP: 0.18,
 
     // ── Combo ───────────────────────────────────────────────
     MAX_COMBO: 8,

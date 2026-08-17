@@ -226,6 +226,7 @@ NeonDelivery.Entities = (function () {
 
     function updatePolice(dt, drone, world) {
         const DR = C.DRONE_RADIUS + C.POLICE_RADIUS;
+        let minChaseDist = Infinity;
 
         for (const p of police) {
             const dx = drone.x - p.x;
@@ -256,6 +257,7 @@ NeonDelivery.Entities = (function () {
                     break;
                 }
                 case 'chase': {
+                    minChaseDist = Math.min(minChaseDist, dist);
                     steerTowards(p, drone.x, drone.y, C.POLICE_SPEED);
                     p.lastSeenX = drone.x;
                     p.lastSeenY = drone.y;
@@ -289,6 +291,12 @@ NeonDelivery.Entities = (function () {
                     break;
                 }
             }
+        }
+
+        if (minChaseDist !== Infinity && NeonDelivery.Audio.updateSiren) {
+            NeonDelivery.Audio.updateSiren(minChaseDist);
+        } else if (NeonDelivery.Audio.updateSiren) {
+            NeonDelivery.Audio.updateSiren(-1);
         }
     }
 
