@@ -2,6 +2,7 @@ const Gameplay = require('../../src/shared/gameplay');
 const ArenaMap = require('../world/ArenaMap');
 const PowerSystem = require('../combat/PowerSystem');
 const DamageSystem = require('../combat/DamageSystem');
+const BotAI = require('../ai/BotAI');
 
 const C = Gameplay.COMBAT;
 const N = Gameplay.NET;
@@ -39,6 +40,7 @@ class ArenaRoom {
         this.tickCounter = 0;
         this.snapshotEveryTicks = Math.max(1, Math.round(N.SERVER_TICK_HZ / N.SNAPSHOT_HZ));
         this.destroyed = false;
+        this.botCounter = 0;
     }
 
     addPlayer(socketId, username) {
@@ -77,6 +79,10 @@ class ArenaRoom {
     }
 
     removePlayer(socketId) {
+        const player = this.players.get(socketId);
+        if (player && player.isBot) {
+            BotAI.unregisterBot(socketId);
+        }
         this.powerSystem.removePlayerHazards(socketId);
         this.players.delete(socketId);
         if (this.hostId === socketId && this.players.size > 0) {
@@ -85,12 +91,64 @@ class ArenaRoom {
         if (this.players.size > 0) this.broadcastState();
     }
 
+    addBot(name) {
+        if (this.players.size >= this.maxPlayers) return null;
+        this.botCounter++;
+        const botId = `bot-${this.botCounter}`;
+        const botName = name || BotAI.nextBotName();
+        const player = {
+            id: botId,
+            username: botName,
+            isReady: true,
+            isBot: true,
+            x: 0,
+            y: 0,
+            vx: 0,
+            vy: 0,
+            angle: 0,
+            health: C.PLAYER_MAX_HEALTH,
+            kills: 0,
+            deaths: 0,
+            score: 0,
+            power: null,
+            alive: true,
+            boosting: false,
+            boostTimer: 0,
+            boostCoolTimer: 0,
+            respawnTimer: 0,
+            spawnProtection: 0,
+            shieldTimer: 0,
+            maceTimer: 0,
+            shootCooldown: 0,
+            hitFlash: 0,
+            hitWall: false,
+            lastFireSeq: 0,
+            pendingFire: false,
+            inputs: { dx: 0, dy: 0, boost: false, shootHeld: false }
+        };
+        this.players.set(botId, player);
+        BotAI.registerBot(botId);
+        this.broadcastState();
+        return botId;
+    }
+
+    removeBots() {
+        for (const [id, player] of this.players) {
+            if (player.isBot) {
+                BotAI.unregisterBot(id);
+                this.powerSystem.removePlayerHazards(id);
+                this.players.delete(id);
+            }
+        }
+    }
+
     destroy() {
         this.destroyed = true;
         if (this.loopInterval) clearInterval(this.loopInterval);
         if (this.spawnerInterval) clearInterval(this.spawnerInterval);
         this.loopInterval = null;
         this.spawnerInterval = null;
+        BotAI.clearAll();
         this.players.clear();
         this.powerSystem.reset();
         this.powerups.length = 0;
@@ -320,6 +378,9 @@ class ArenaRoom {
                 this.broadcastState();
                 return;
             }
+
+            // Update bot AI inputs before player physics
+            BotAI.updateAll(this);
 
             for (const p of this.players.values()) {
                 if (!p.alive) {

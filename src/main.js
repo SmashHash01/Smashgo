@@ -135,6 +135,18 @@ NeonDelivery.Game = (function () {
                 tryEnterMobileLandscape();
                 NeonDelivery.Multiplayer.startMatch();
             },
+            onPlayWithBot: () => {
+                const username = prompt('Enter your name:', 'Player') || 'Player';
+                tryEnterMobileLandscape();
+                NeonDelivery.Network.playWithBot(username, (res) => {
+                    if (res && res.success) {
+                        activeMode = 'multiplayer';
+                        NeonDelivery.Multiplayer.onRoomStateUpdate(res.roomState);
+                    } else {
+                        alert((res && res.message) || 'Could not connect to server. Try again in a few seconds!');
+                    }
+                });
+            },
             onLobbyLeave: () => NeonDelivery.Multiplayer.leaveRoom(),
             onMpRematch: () => NeonDelivery.Multiplayer.leaveRoom(),
             onMpLeave: () => NeonDelivery.Multiplayer.leaveRoom()

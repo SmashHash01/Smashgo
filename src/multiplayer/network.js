@@ -114,10 +114,22 @@ NeonDelivery.Network = (function() {
         if (socket && socket.connected) socket.emit('leaveRoom');
     }
 
+    function playWithBot(username, callback) {
+        ensureConnected(() => {
+            socket.emit('playWithBot', { username }, callback);
+        }, callback);
+    }
+
+    function addBot(callback) {
+        if (socket && socket.connected) socket.emit('addBot', callback || (() => {}));
+    }
+
     return {
         init,
         createRoom,
         joinRoom,
+        playWithBot,
+        addBot,
         setReady,
         setMatchDuration,
         startMatch,

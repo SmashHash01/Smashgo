@@ -52,8 +52,14 @@ function detachFromCurrentRoom(socket) {
 
     if (!room) return;
     room.removePlayer(socket.id);
-    if (room.players.size === 0) {
-        room.destroy(); // critical: stop abandoned simulation/spawner intervals
+
+    // Count remaining human (non-bot) players
+    let humanCount = 0;
+    for (const p of room.players.values()) {
+        if (!p.isBot) humanCount++;
+    }
+    if (humanCount === 0) {
+        room.destroy();
         rooms.delete(roomCode);
     }
 }
@@ -111,6 +117,35 @@ io.on('connection', (socket) => {
     socket.on('inputs', (inputs) => {
         const room = socket.roomId && rooms.get(socket.roomId);
         if (room && room.state === 'playing') room.setPlayerInputs(socket.id, inputs);
+    });
+
+    socket.on('addBot', (callback = () => {}) => {
+        const room = socket.roomId && rooms.get(socket.roomId);
+        if (!room) return callback({ success: false, message: 'Not in a room.' });
+        if (room.state !== 'lobby') return callback({ success: false, message: 'Match already started.' });
+        if (room.players.size >= room.maxPlayers) return callback({ success: false, message: 'Room is full.' });
+        const botId = room.addBot();
+        callback({ success: true, botId });
+    });
+
+    socket.on('playWithBot', (data = {}, callback = () => {}) => {
+        detachFromCurrentRoom(socket);
+        const username = cleanUsername(data.username);
+
+        let roomCode = generateRoomCode();
+        while (rooms.has(roomCode)) roomCode = generateRoomCode();
+
+        const room = new ArenaRoom(roomCode, socket.id, io);
+        rooms.set(roomCode, room);
+        socket.join(roomCode);
+        socket.roomId = roomCode;
+        socket.username = username;
+
+        room.addPlayer(socket.id, username);
+        room.addBot();
+        room.startMatch();
+
+        callback({ success: true, roomCode, roomState: room.getState() });
     });
 
     socket.on('leaveRoom', () => detachFromCurrentRoom(socket));

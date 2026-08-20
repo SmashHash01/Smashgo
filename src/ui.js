@@ -69,6 +69,7 @@ NeonDelivery.UI = (function () {
             
             // Main Buttons
             btnPlaySolo:        document.getElementById('btn-play-solo'),
+            btnPlayBot:         document.getElementById('btn-play-bot'),
             btnShowCreateRoom:  document.getElementById('btn-show-create-room'),
             btnShowJoinRoom:    document.getElementById('btn-show-join-room'),
             
@@ -249,6 +250,7 @@ NeonDelivery.UI = (function () {
 
         // Solo Buttons
         bind('btnPlaySolo',  handlers.onPlaySolo);
+        bind('btnPlayBot',   handlers.onPlayWithBot);
         bind('btnResume',    handlers.onResume);
         bind('btnQuit',      handlers.onQuit);
         bind('btnNextLevel', handlers.onNextLevel);
