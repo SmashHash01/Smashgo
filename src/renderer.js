@@ -1305,11 +1305,15 @@ NeonDelivery.Renderer = (function () {
         if (gameData && gameData.players) {
             for (const p of gameData.players) {
                 if (!p.alive) continue;
-                ctx.fillStyle   = (p.id === NeonDelivery.Network.localId) ? '#00f5ff' : '#ff3366';
-                ctx.shadowBlur  = (p.id === NeonDelivery.Network.localId) ? 8 : 4;
-                ctx.shadowColor = ctx.fillStyle;
+                const isMe = (p.id === NeonDelivery.Network.localId);
+                const dotColor = p.color || (isMe ? '#00f5ff' : '#ff3366');
+                ctx.fillStyle   = dotColor;
+                ctx.shadowBlur  = isMe ? 8 : 4;
+                ctx.shadowColor = dotColor;
                 ctx.beginPath();
-                ctx.arc(MX + p.x * scale, MY + p.y * scale, 3, 0, Math.PI * 2);
+                const px = MX + (p.renderX || p.x) * scale;
+                const py = MY + (p.renderY || p.y) * scale;
+                ctx.arc(px, py, isMe ? 3.5 : 2.5, 0, Math.PI * 2);
                 ctx.fill();
             }
         } else if (drone) {

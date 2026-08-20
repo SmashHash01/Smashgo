@@ -36,6 +36,7 @@ NeonDelivery.CombatVisuals = (function () {
     function onCombatFx(ev) {
         if (!ev) return;
         const CE = Gameplay.COMBAT_EVENT;
+        const A = NeonDelivery.Audio;
 
         if (ev.t === CE.BLASTER_TRACE) {
             tracers.push({
@@ -50,6 +51,7 @@ NeonDelivery.CombatVisuals = (function () {
             if (ev.hit) {
                 NeonDelivery.Particles.emit('spark', ev.x2, ev.y2, 4);
             }
+            if (A && A.shoot) A.shoot();
         } else if (ev.t === CE.ROCKET_EXPLODE) {
             NeonDelivery.Particles.emit('shatter', ev.x, ev.y, 14);
             addScreenShake(2.5);
@@ -62,6 +64,7 @@ NeonDelivery.CombatVisuals = (function () {
                 life: 220,
                 maxLife: 220
             });
+            if (A && A.explosion) A.explosion();
         } else if (ev.t === CE.MINE_EXPLODE || ev.t === CE.FAKECRATE_EXPLODE) {
             NeonDelivery.Particles.emit('shatter', ev.x, ev.y, 18);
             addScreenShake(3.5);
@@ -74,6 +77,7 @@ NeonDelivery.CombatVisuals = (function () {
                 life: 250,
                 maxLife: 250
             });
+            if (A && A.explosion) A.explosion();
         } else if (ev.t === CE.CANNON_EXPLODE) {
             NeonDelivery.Particles.emit('shatter', ev.x, ev.y, 12);
             addScreenShake(2.0);
@@ -86,6 +90,7 @@ NeonDelivery.CombatVisuals = (function () {
                 life: 200,
                 maxLife: 200
             });
+            if (A && A.explosion) A.explosion();
         } else if (ev.t === CE.ARCBOMB_EXPLODE) {
             NeonDelivery.Particles.emit('shatter', ev.x, ev.y, 25);
             addScreenShake(6.0);
@@ -98,12 +103,23 @@ NeonDelivery.CombatVisuals = (function () {
                 life: 350,
                 maxLife: 350
             });
+            if (A && A.explosion) A.explosion();
+        } else if (ev.t === CE.MINE_PLACE) {
+            if (A && A.minePlace) A.minePlace();
+        } else if (ev.t === CE.SHIELD_ON) {
+            if (A && A.shieldUp) A.shieldUp();
+        } else if (ev.t === CE.MACE_ON) {
+            if (A && A.maceActivate) A.maceActivate();
+        } else if (ev.t === CE.ROCKET_FIRE) {
+            if (A && A.rocket) A.rocket();
         }
     }
 
     function onCombatConfirm(data) {
         if (!data) return;
+        const A = NeonDelivery.Audio;
         if (data.type === 'hit') {
+            if (A && A.collision) A.collision();
             toasts.push({
                 text: `-${data.damage}`,
                 color: '#00ffcc',
@@ -112,8 +128,9 @@ NeonDelivery.CombatVisuals = (function () {
             });
         } else if (data.type === 'kill') {
             addScreenShake(4.0);
+            if (A && A.explosion) A.explosion();
             toasts.push({
-                text: '💥 TARGET SMASHED! +100',
+                text: `💥 ${data.victimName ? data.victimName.toUpperCase() + ' SMASHED' : 'TARGET SMASHED'}! +100`,
                 color: '#ffe600',
                 life: 1400,
                 maxLife: 1400,

@@ -46,6 +46,11 @@ NeonDelivery.Network = (function() {
         socket.on('combatConfirm', (data) => {
             if (NeonDelivery.CombatVisuals) NeonDelivery.CombatVisuals.onCombatConfirm(data);
         });
+        socket.on('killFeed', (data) => {
+            if (NeonDelivery.Multiplayer && NeonDelivery.Multiplayer.onKillFeed) {
+                NeonDelivery.Multiplayer.onKillFeed(data);
+            }
+        });
     }
 
     function ensureConnected(actionFn, callback) {

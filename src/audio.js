@@ -178,6 +178,62 @@ NeonDelivery.Audio = (function () {
         osc(660, 'square', 0.08, 0.12);
     }
 
+    // ── Combat SFX ──────────────────────────────────────────
+    function shoot() {
+        // Pulse Blaster: short laser tick
+        if (!ctx || muted) return;
+        resume();
+        osc(1200, 'square', 0.025, 0.07, 600);
+        noiseBurst(0.015, 0.04);
+    }
+
+    function rocket() {
+        // Tri-Rocket: whoosh then low boom on landing
+        if (!ctx || muted) return;
+        resume();
+        osc(180, 'sawtooth', 0.18, 0.10, 60);
+        noiseBurst(0.10, 0.08, ctx.currentTime + 0.12);
+    }
+
+    function minePlace() {
+        // Neon Mine placed: two quick low beeps
+        if (!ctx || muted) return;
+        resume();
+        const now = ctx.currentTime;
+        osc(220, 'sine', 0.06, 0.12, undefined, now);
+        osc(330, 'sine', 0.06, 0.10, undefined, now + 0.10);
+    }
+
+    function shieldUp() {
+        // Phase Shield activated: rising electronic hum
+        if (!ctx || muted) return;
+        resume();
+        const now = ctx.currentTime;
+        osc(220, 'sine', 0.30, 0.08, 660, now);
+        osc(330, 'sine', 0.20, 0.06, 880, now + 0.05);
+    }
+
+    function maceActivate() {
+        // Wrecking Halo: mechanical spin-up
+        if (!ctx || muted) return;
+        resume();
+        const now = ctx.currentTime;
+        osc(80, 'sawtooth', 0.25, 0.12, 200, now);
+        noiseBurst(0.18, 0.06, now + 0.05);
+        osc(200, 'sawtooth', 0.20, 0.08, 400, now + 0.12);
+    }
+
+    function powerPickup() {
+        // Mystery crate collected: cyber-ping ascending arpeggio
+        if (!ctx || muted) return;
+        resume();
+        const now = ctx.currentTime;
+        osc(440, 'sine', 0.06, 0.14, undefined, now);
+        osc(660, 'sine', 0.06, 0.16, undefined, now + 0.05);
+        osc(880, 'sine', 0.06, 0.18, undefined, now + 0.10);
+        osc(1320, 'sine', 0.10, 0.22, undefined, now + 0.16);
+    }
+
     // ── Siren Loop ──────────────────────────────────────────
     function initSiren() {
         if (!ctx) return;
@@ -229,6 +285,7 @@ NeonDelivery.Audio = (function () {
         init, setMuted, isMuted, resume,
         boost, pickup, delivery, collision, coin, laser,
         warning, explosion, uiClick, comboUp, overdrive, timerWarning,
+        shoot, rocket, minePlace, shieldUp, maceActivate, powerPickup,
         updateSiren
     };
 })();

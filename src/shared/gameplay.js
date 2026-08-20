@@ -249,7 +249,9 @@
         SHIELD_ON: 6,
         MACE_ON: 7,
         HIT_CONFIRM: 8,
-        KILL_CONFIRM: 9
+        KILL_CONFIRM: 9,
+        MINE_PLACE: 10,
+        ROCKET_FIRE: 11
     });
 
     function chooseWeightedPower(defs = POWERS, excludeType = null) {

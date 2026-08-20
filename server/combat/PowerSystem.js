@@ -203,6 +203,9 @@ class PowerSystem {
         }
 
         player.shootCooldown = 400;
+        if (typeof room.emitCombatFx === 'function') {
+            room.emitCombatFx({ t: COMBAT_EVENT.ROCKET_FIRE, ownerId: player.id });
+        }
         return true;
     }
 
@@ -226,6 +229,9 @@ class PowerSystem {
         });
 
         player.shootCooldown = def.cooldownMs || 500;
+        if (typeof room.emitCombatFx === 'function') {
+            room.emitCombatFx({ t: COMBAT_EVENT.MINE_PLACE, ownerId: player.id });
+        }
         return true;
     }
 

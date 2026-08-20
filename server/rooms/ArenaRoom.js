@@ -231,6 +231,11 @@ class ArenaRoom {
         this.io.to(socketId).emit(eventName, data);
     }
 
+    emitToRoom(eventName, data) {
+        if (this.destroyed) return;
+        this.io.to(this.roomCode).emit(eventName, data);
+    }
+
     startMatch() {
         if (this.state !== 'lobby' || this.destroyed) return;
         this.state = 'playing';

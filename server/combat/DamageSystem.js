@@ -72,6 +72,14 @@ class DamageSystem {
                     room.emitToPlayer(killer.id, 'combatConfirm', {
                         type: 'kill',
                         victimId: target.id,
+                        victimName: target.username,
+                        killerName: killer.username
+                    });
+                }
+                // Broadcast kill to ALL players in room for the kill feed
+                if (typeof room.emitToRoom === 'function') {
+                    room.emitToRoom('killFeed', {
+                        killerName: killer.username,
                         victimName: target.username
                     });
                 }

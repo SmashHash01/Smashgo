@@ -2,7 +2,19 @@ NeonDelivery.Multiplayer = (function() {
     const Gameplay = NeonDelivery.Gameplay;
     const Physics = Gameplay.PHYSICS;
     const Net = Gameplay.NET;
-    const Weapons = Gameplay.WEAPONS;
+
+    // 8 distinct neon player colors (index 0 reserved for self = cyan)
+    const PLAYER_COLORS = [
+        '#00f5ff', // self — neon cyan
+        '#ff3366', // hot pink
+        '#ff9f1c', // neon orange
+        '#39ff14', // neon green
+        '#bf00ff', // electric violet
+        '#ffff00', // electric yellow
+        '#ff6ec7', // hot magenta
+        '#00bfff'  // deep sky blue
+    ];
+    let colorIndex = 1; // cycles for remote players
 
     let currentRoomState = null;
     let isReady = false;
@@ -10,6 +22,15 @@ NeonDelivery.Multiplayer = (function() {
     let lastTime = 0;
     let displayMatchTimer = 0;
     let scoreboardTop = [];
+
+    // Kill feed: array of { text, life, maxLife }
+    const killFeedEntries = [];
+
+    // Respawn flashes: { x, y, life, maxLife }
+    const spawnFlashes = [];
+
+    // Hit vignette: flash amount 0-1
+    let hitVignetteAmt = 0;
 
     const playerVisuals = new Map();
     const visualList = [];
@@ -51,8 +72,11 @@ NeonDelivery.Multiplayer = (function() {
             const activeIds = new Set();
             for (const p of state.players) {
                 activeIds.add(p.id);
+                const isLocal = p.id === localId;
                 let v = playerVisuals.get(p.id);
                 if (!v) {
+                    // Assign a persistent neon color
+                    const assignedColor = isLocal ? PLAYER_COLORS[0] : PLAYER_COLORS[colorIndex++ % PLAYER_COLORS.length] || '#ff3366';
                     v = {
                         id: p.id,
                         x: p.x,
@@ -76,11 +100,26 @@ NeonDelivery.Multiplayer = (function() {
                         shieldTimer: p.shieldTimer || 0,
                         maceTimer: p.maceTimer || 0,
                         spawnProtection: p.spawnProtection || 0,
-                        respawnTimer: p.respawnTimer || 0
+                        respawnTimer: p.respawnTimer || 0,
+                        color: assignedColor
                     };
                     playerVisuals.set(p.id, v);
                     listChanged = true;
                 } else {
+                    // Detect power pickup (null → something)
+                    if (isLocal && !v.power && p.power) {
+                        if (NeonDelivery.Audio && NeonDelivery.Audio.powerPickup) NeonDelivery.Audio.powerPickup();
+                        NeonDelivery.Particles.emit('pickup', v.renderX, v.renderY, 10);
+                    }
+                    // Detect respawn (dead → alive) — spawn flash ring
+                    if (!v.alive && p.alive) {
+                        spawnFlashes.push({ x: p.x, y: p.y, life: 500, maxLife: 500 });
+                    }
+                    // Detect hit on local player → vignette
+                    if (isLocal && p.hitFlash > 0 && v.hitFlash <= 0) {
+                        hitVignetteAmt = 1.0;
+                    }
+
                     v.targetX = p.x;
                     v.targetY = p.y;
                     v.targetAngle = p.angle;
@@ -127,6 +166,17 @@ NeonDelivery.Multiplayer = (function() {
             }
             NeonDelivery.UI.showMpResults(state.rankings || []);
         }
+    }
+
+    function onKillFeed(data) {
+        if (!data || !data.killerName || !data.victimName) return;
+        killFeedEntries.unshift({
+            text: `${data.killerName} ⚡ ${data.victimName}`,
+            life: 5000,
+            maxLife: 5000
+        });
+        // Keep only 5 entries
+        if (killFeedEntries.length > 5) killFeedEntries.length = 5;
     }
 
     function bootstrapGame(mapConfig) {
@@ -286,6 +336,21 @@ NeonDelivery.Multiplayer = (function() {
 
         NeonDelivery.Particles.update(dt);
         if (NeonDelivery.CombatVisuals) NeonDelivery.CombatVisuals.update(dt);
+
+        // Tick hit vignette
+        if (hitVignetteAmt > 0) hitVignetteAmt = Math.max(0, hitVignetteAmt - dt * 0.004);
+
+        // Tick kill feed entries
+        for (let i = killFeedEntries.length - 1; i >= 0; i--) {
+            killFeedEntries[i].life -= dt;
+            if (killFeedEntries[i].life <= 0) killFeedEntries.splice(i, 1);
+        }
+
+        // Tick spawn flashes
+        for (let i = spawnFlashes.length - 1; i >= 0; i--) {
+            spawnFlashes[i].life -= dt;
+            if (spawnFlashes[i].life <= 0) spawnFlashes.splice(i, 1);
+        }
     }
 
     function render(dt) {
@@ -319,8 +384,26 @@ NeonDelivery.Multiplayer = (function() {
             );
         }
 
+        // Render spawn flash rings
+        const now = performance.now();
+        for (const sf of spawnFlashes) {
+            const s = NeonDelivery.Camera.worldToScreen(sf.x, sf.y);
+            const frac = 1 - sf.life / sf.maxLife;
+            const r = 18 + frac * 55;
+            const alpha = 1 - frac;
+            ctx.save();
+            ctx.strokeStyle = `rgba(0,255,136,${alpha})`;
+            ctx.shadowColor = '#00ff88';
+            ctx.shadowBlur = 20 * alpha;
+            ctx.lineWidth = 3 * (1 - frac * 0.7);
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+        }
+
         // Render mystery power crates, health, overdrive
-        const pulse = 0.82 + 0.18 * Math.sin(performance.now() * 0.005);
+        const pulse = 0.82 + 0.18 * Math.sin(now * 0.005);
         if (currentRoomState.powerups) {
             for (const pu of currentRoomState.powerups) {
                 const s = NeonDelivery.Camera.worldToScreen(pu.x, pu.y);
@@ -344,14 +427,17 @@ NeonDelivery.Multiplayer = (function() {
                     ctx.textAlign = 'center';
                     ctx.fillText('⚡', 0, 6);
                 } else {
-                    // Mystery Power Crate
+                    // Mystery Power Crate — glowing spinning border
+                    const rot = (now * 0.002) % (Math.PI * 2);
+                    ctx.rotate(rot * 0.5);
                     ctx.fillStyle = '#7d5cff';
                     ctx.shadowColor = '#b26cff';
-                    ctx.shadowBlur = 14;
+                    ctx.shadowBlur = 16;
                     ctx.fillRect(-10, -10, 20, 20);
                     ctx.strokeStyle = '#ffffff';
                     ctx.lineWidth = 2;
                     ctx.strokeRect(-10, -10, 20, 20);
+                    ctx.rotate(-(rot * 0.5));
                     ctx.fillStyle = '#ffffff';
                     ctx.font = 'bold 14px Orbitron';
                     ctx.textAlign = 'center';
@@ -368,11 +454,12 @@ NeonDelivery.Multiplayer = (function() {
             if (s.x < -90 || s.x > CW + 90 || s.y < -90 || s.y > CH + 90) continue;
 
             const isMe = p.id === localId;
+            const carColor = p.color || (isMe ? '#00f5ff' : '#ff3366');
             NeonDelivery.Renderer.drawCar(ctx, NeonDelivery.Camera, {
                 x: p.renderX,
                 y: p.renderY,
                 angle: p.renderAngle,
-                color: isMe ? '#00f5ff' : '#ff3366',
+                color: carColor,
                 colorIdx: isMe ? 0 : 2,
                 boosting: p.boosting
             });
@@ -400,14 +487,37 @@ NeonDelivery.Multiplayer = (function() {
             ctx.fillStyle = p.health > 50 ? '#00ff88' : (p.health > 25 ? '#ffcc00' : '#ff3366');
             ctx.fillRect(-16, -30, 32 * (Math.max(0, p.health) / 100), 4);
 
+            // Power icon above car (visible for all players)
+            let powerIcon = null;
+            if (p.shieldTimer > 0) powerIcon = '🛡️';
+            else if (p.maceTimer > 0) powerIcon = '⚙️';
+            else if (p.power) {
+                const def = Gameplay.POWERS[p.power.type];
+                powerIcon = def ? def.icon : '⚡';
+            }
+            if (powerIcon) {
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(powerIcon, 0, -48);
+            }
+
             ctx.font = 'bold 10px Orbitron';
             ctx.textAlign = 'center';
-            ctx.fillStyle = isMe ? '#00f5ff' : '#ffffff';
+            ctx.fillStyle = isMe ? '#00f5ff' : carColor;
             ctx.fillText(p.username || 'Player', 0, -35);
             ctx.restore();
         }
 
         ctx.restore(); // Undo screen shake
+
+        // Hit vignette (red border flash when local player takes damage)
+        if (hitVignetteAmt > 0.01) {
+            const gradient = ctx.createRadialGradient(CW / 2, CH / 2, CH * 0.3, CW / 2, CH / 2, Math.max(CW, CH) * 0.75);
+            gradient.addColorStop(0, 'rgba(255,0,0,0)');
+            gradient.addColorStop(1, `rgba(255,0,0,${hitVignetteAmt * 0.55})`);
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, CW, CH);
+        }
 
         // Render HUD toasts
         if (NeonDelivery.CombatVisuals) {
@@ -429,6 +539,27 @@ NeonDelivery.Multiplayer = (function() {
         ctx.fillStyle = '#00f5ff';
         ctx.textAlign = 'left';
         ctx.fillText('ARENA MATCH', 14, 24 + topY);
+
+        // Kill feed (below header bar, top-left)
+        if (killFeedEntries.length > 0) {
+            ctx.font = 'bold 11px Rajdhani';
+            ctx.textAlign = 'left';
+            let ky = 62;
+            for (const kf of killFeedEntries) {
+                const alpha = Math.min(1, kf.life / 800);
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                ctx.fillStyle = 'rgba(2,8,16,0.7)';
+                const tw = ctx.measureText(kf.text).width;
+                ctx.fillRect(10, ky - 12, tw + 10, 16);
+                ctx.fillStyle = '#ffe600';
+                ctx.shadowColor = '#ff9f1c';
+                ctx.shadowBlur = 6;
+                ctx.fillText(kf.text, 14, ky);
+                ctx.restore();
+                ky += 19;
+            }
+        }
 
         ctx.textAlign = 'right';
         ctx.font = 'bold 12px Rajdhani';
@@ -528,5 +659,5 @@ NeonDelivery.Multiplayer = (function() {
         window.location.reload();
     }
 
-    return { onRoomStateUpdate, toggleReady, setMatchLength, startMatch, leaveRoom };
+    return { onRoomStateUpdate, onKillFeed, toggleReady, setMatchLength, startMatch, leaveRoom };
 })();
