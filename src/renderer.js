@@ -23,11 +23,30 @@ NeonDelivery.Renderer = (function () {
     // ── Init ─────────────────────────────────────────────────
     function init(canvasEl) {
         canvas = canvasEl;
-        ctx    = canvas.getContext('2d');
+        ctx = canvas.getContext('2d', { alpha: false });
+        
+        // Performance fix: High shadowBlur values cause exponential frame drops.
+        // Cap it globally to a reasonable max without breaking the neon glow.
+        const originalShadowBlurSet = Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, 'shadowBlur').set;
+        if (originalShadowBlurSet) {
+            Object.defineProperty(ctx, 'shadowBlur', {
+                set: function(val) {
+                    originalShadowBlurSet.call(this, Math.min(val, 12));
+                }
+            });
+        }
+
         worldCvs = document.createElement('canvas');
         worldCvs.width  = WS;
         worldCvs.height = WS;
-        worldCtx = worldCvs.getContext('2d');
+        worldCtx = worldCvs.getContext('2d', { alpha: false });
+        if (originalShadowBlurSet) {
+            Object.defineProperty(worldCtx, 'shadowBlur', {
+                set: function(val) {
+                    originalShadowBlurSet.call(this, Math.min(val, 12));
+                }
+            });
+        }
     }
 
     // ── Pre-render world ─────────────────────────────────────
@@ -431,7 +450,7 @@ NeonDelivery.Renderer = (function () {
         const r     = 14 * pulse;
 
         ctx.save();
-        ctx.shadowBlur  = 18;
+        ctx.shadowBlur = 18; if (ctx.shadowBlur > 15) ctx.shadowBlur = 15;
         ctx.shadowColor = C.COLOR.PACKAGE;
         ctx.strokeStyle = C.COLOR.PACKAGE;
         ctx.lineWidth   = 2;
@@ -475,7 +494,7 @@ NeonDelivery.Renderer = (function () {
         const outerR = 28 * pulse;
 
         ctx.save();
-        ctx.shadowBlur  = 30;
+        ctx.shadowBlur = 30; if (ctx.shadowBlur > 15) ctx.shadowBlur = 15;
         ctx.shadowColor = C.COLOR.DELIVERY;
 
         // Outer pulsing ring
@@ -864,7 +883,7 @@ NeonDelivery.Renderer = (function () {
         if (chasing) {
             const leftCol  = flashRed  ? '#ff2020' : '#2040ff';
             const rightCol = flashRed  ? '#2040ff' : '#ff2020';
-            ctx.shadowBlur = 16 * z;
+            ctx.shadowBlur = 16; if (ctx.shadowBlur > 15) ctx.shadowBlur = 15 * z;
 
             ctx.shadowColor = leftCol;
             ctx.fillStyle   = leftCol;
@@ -975,7 +994,7 @@ NeonDelivery.Renderer = (function () {
             ctx.globalAlpha  = 0.45 + 0.2 * Math.sin(t * 0.005);
             ctx.strokeStyle  = '#4466ff';
             ctx.lineWidth    = 2.5;
-            ctx.shadowBlur   = 20;
+            ctx.shadowBlur = 20; if (ctx.shadowBlur > 15) ctx.shadowBlur = 15;
             ctx.shadowColor  = '#4466ff';
             ctx.beginPath();
             ctx.arc(0, 0, 20, 0, Math.PI * 2);
@@ -995,7 +1014,7 @@ NeonDelivery.Renderer = (function () {
                 ctx.globalAlpha = 0.25 + 0.15 * Math.sin(t * 0.006);
                 ctx.strokeStyle = '#00ff88';
                 ctx.lineWidth   = 6;
-                ctx.shadowBlur  = 28;
+                ctx.shadowBlur = 28; if (ctx.shadowBlur > 15) ctx.shadowBlur = 15;
                 ctx.shadowColor = '#00ff88';
                 ctx.beginPath();
                 ctx.arc(0, 0, 28, 0, Math.PI * 2);
@@ -1004,14 +1023,14 @@ NeonDelivery.Renderer = (function () {
                 // Countdown arc (shrinks as timer depletes)
                 ctx.globalAlpha = 0.85;
                 ctx.lineWidth   = 3;
-                ctx.shadowBlur  = 14;
+                ctx.shadowBlur = 14; if (ctx.shadowBlur > 15) ctx.shadowBlur = 15;
                 ctx.beginPath();
                 ctx.arc(0, 0, 28, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * spFrac);
                 ctx.stroke();
 
                 // Countdown number
                 ctx.globalAlpha  = 1;
-                ctx.shadowBlur   = 10;
+                ctx.shadowBlur = 10; if (ctx.shadowBlur > 15) ctx.shadowBlur = 15;
                 ctx.font         = 'bold 12px Orbitron';
                 ctx.fillStyle    = '#00ff88';
                 ctx.textAlign    = 'center';
@@ -1126,7 +1145,7 @@ NeonDelivery.Renderer = (function () {
 
         if (drone.boosting) {
             ctx.fillStyle   = C.COLOR.DRONE_BOOST;
-            ctx.shadowBlur  = 10;
+            ctx.shadowBlur = 10; if (ctx.shadowBlur > 15) ctx.shadowBlur = 15;
             ctx.shadowColor = C.COLOR.DRONE_BOOST;
             ctx.fillRect(bBarX, bBarY, bBarW * activePct, bBarH);
         } else {
@@ -1162,7 +1181,7 @@ NeonDelivery.Renderer = (function () {
 
         if (drone.dashing) {
             ctx.fillStyle   = '#ff00cc';
-            ctx.shadowBlur  = 14;
+            ctx.shadowBlur = 14; if (ctx.shadowBlur > 15) ctx.shadowBlur = 15;
             ctx.shadowColor = '#ff00cc';
             ctx.fillRect(dBarX, dBarY, dBarW * dActivePct, dBarH);
         } else {
@@ -1204,7 +1223,7 @@ NeonDelivery.Renderer = (function () {
         const pulse = 0.7 + 0.3 * Math.sin(t * 0.006);
         ctx.save();
         ctx.globalAlpha  = 0.85 * pulse;
-        ctx.shadowBlur   = 12;
+        ctx.shadowBlur = 12; if (ctx.shadowBlur > 15) ctx.shadowBlur = 15;
         ctx.shadowColor  = C.COLOR.DELIVERY;
         ctx.strokeStyle  = C.COLOR.DELIVERY;
         ctx.fillStyle    = C.COLOR.DELIVERY;

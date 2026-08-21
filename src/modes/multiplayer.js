@@ -313,9 +313,12 @@ NeonDelivery.Multiplayer = (function() {
             } else {
                 // Remote Player Dead-Reckoning + Interpolation Smoothing
                 const stepFrac = Math.min(2, dt / 16.67);
-                v.renderX += (v.vx || 0) * stepFrac;
-                v.renderY += (v.vy || 0) * stepFrac;
+                
+                // Advance the *true* target position based on server velocity
+                v.targetX += (v.vx || 0) * stepFrac;
+                v.targetY += (v.vy || 0) * stepFrac;
 
+                // Lerp visual position towards the moving target
                 const lerpFactor = Math.min(1, dt * 0.06);
                 v.renderX += (v.targetX - v.renderX) * lerpFactor;
                 v.renderY += (v.targetY - v.renderY) * lerpFactor;
