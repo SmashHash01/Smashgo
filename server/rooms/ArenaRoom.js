@@ -329,7 +329,7 @@ class ArenaRoom {
         player.angle = 0;
         player.alive = true;
         player.health = C.PLAYER_MAX_HEALTH;
-        this.powerSystem.grantRandomPower(player);
+        player.power = null; // always start/respawn unarmed — must collect a crate
         player.boosting = false;
         player.boostTimer = 0;
         player.boostCoolTimer = 0;
@@ -425,9 +425,15 @@ class ArenaRoom {
                         p.boosting = true;
                         p.boostTimer = C.OVERDRIVE_MS;
                     } else {
-                        this.powerSystem.grantRandomPower(p);
-                        p.pendingFire = false;
-                        p.shootCooldown = Math.max(p.shootCooldown || 0, 200);
+                        // Only grant if no current power — don't overwrite
+                        if (!p.power) {
+                            this.powerSystem.grantRandomPower(p);
+                            p.pendingFire = false;
+                            p.shootCooldown = Math.max(p.shootCooldown || 0, 200);
+                        } else {
+                            // Already has a power — skip this crate, don't consume it
+                            continue;
+                        }
                     }
                     this.powerups.splice(j, 1);
                 }

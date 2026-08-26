@@ -75,6 +75,8 @@ NeonDelivery.Multiplayer = (function() {
                 const isLocal = p.id === localId;
                 let v = playerVisuals.get(p.id);
                 if (!v) {
+                    // Skip creating a visual for unspawned players sitting at 0,0
+                    if (!p.alive && p.x === 0 && p.y === 0) continue;
                     // Assign a persistent neon color
                     const assignedColor = isLocal ? PLAYER_COLORS[0] : PLAYER_COLORS[colorIndex++ % PLAYER_COLORS.length] || '#ff3366';
                     v = {
@@ -87,6 +89,8 @@ NeonDelivery.Multiplayer = (function() {
                         targetX: p.x,
                         targetY: p.y,
                         targetAngle: p.angle,
+                        lastSnapX: p.x,
+                        lastSnapY: p.y,
                         vx: p.vx || 0,
                         vy: p.vy || 0,
                         health: p.health,
@@ -123,6 +127,8 @@ NeonDelivery.Multiplayer = (function() {
                     v.targetX = p.x;
                     v.targetY = p.y;
                     v.targetAngle = p.angle;
+                    v.lastSnapX = p.x;
+                    v.lastSnapY = p.y;
                     
                     if (!isLocal) {
                         v.vx = p.vx || 0;
@@ -327,8 +333,16 @@ NeonDelivery.Multiplayer = (function() {
                 const stepFrac = Math.min(2, dt / 16.67);
                 
                 // Advance the *true* target position based on server velocity
-                v.targetX += (v.vx || 0) * stepFrac;
-                v.targetY += (v.vy || 0) * stepFrac;
+                // but clamp drift to ≤200px from last confirmed server position
+                const newTX = v.targetX + (v.vx || 0) * stepFrac;
+                const newTY = v.targetY + (v.vy || 0) * stepFrac;
+                const driftX = newTX - v.lastSnapX;
+                const driftY = newTY - v.lastSnapY;
+                const driftDist = Math.hypot(driftX, driftY);
+                if (driftDist < 200) {
+                    v.targetX = newTX;
+                    v.targetY = newTY;
+                }
 
                 // Lerp visual position towards the moving target
                 const lerpFactor = Math.min(1, dt * 0.06);
