@@ -37,7 +37,7 @@ const REACTION_TICKS = 6;        // ~200ms at 30Hz — how often bot re-evaluate
 const AIM_WOBBLE_RAD = 0.14;     // ±8° random steering wobble
 const FIRE_MISS_CHANCE = 0.30;   // 30% chance to skip a fire opportunity
 const BOOST_CHANCE_PER_SEC = 0.30;
-const POWERUP_SEEK_RANGE = 600;  // how far bot looks for powerups
+const POWERUP_SEEK_RANGE = 250;  // bots only seek nearby crates — don't race the human
 const HUNT_RANGE = 400;          // how far bot looks for enemies
 const ATTACK_RANGE = {
     machinegun: 200,

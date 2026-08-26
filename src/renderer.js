@@ -23,7 +23,9 @@ NeonDelivery.Renderer = (function () {
     // ── Init ─────────────────────────────────────────────────
     function init(canvasEl) {
         canvas = canvasEl;
-        ctx = canvas.getContext('2d', { alpha: false });
+        // NOTE: do NOT use { alpha: false } on the main ctx — the game renders
+        // layered transparency for neon glows and overlays. alpha:false breaks that.
+        ctx = canvas.getContext('2d');
         
         // Performance fix: High shadowBlur values cause exponential frame drops.
         // Cap it globally to a reasonable max without breaking the neon glow.
@@ -36,6 +38,7 @@ NeonDelivery.Renderer = (function () {
             });
         }
 
+        // The offscreen world canvas CAN use alpha:false — it's always fully painted
         worldCvs = document.createElement('canvas');
         worldCvs.width  = WS;
         worldCvs.height = WS;

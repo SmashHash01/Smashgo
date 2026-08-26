@@ -328,7 +328,7 @@
             PLAYER_MAX_HEALTH: 100,
             RESPAWN_MS: 3000,
             SPAWN_PROTECTION_MS: 1200,
-            PICKUP_RADIUS_SQ: 1400,
+            PICKUP_RADIUS_SQ: 4200,   // ~65px radius — reliable at 30Hz server tick
             HIT_RADIUS_SQ: 500,
             MAX_POWERUPS: 12,
             POWERUP_SPAWN_MS: 2400,
