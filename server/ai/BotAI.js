@@ -68,6 +68,7 @@ class BotState {
         this.waypointY = 0;
         this.targetPlayerId = null;
         this.lastDecisionTick = 0;
+        this.wobble = 0;
         this.pickNewWaypoint();
     }
 
@@ -131,6 +132,7 @@ function updateBot(room, bot, bs) {
 
     if (shouldDecide) {
         bs.lastDecisionTick = bs.tickCounter;
+        bs.wobble = (Math.random() - 0.5) * AIM_WOBBLE_RAD * 2;
 
         for (const p of room.players.values()) {
             if (p.id === bot.id || !p.alive) continue;
@@ -142,15 +144,18 @@ function updateBot(room, bot, bs) {
             }
         }
 
-        for (const pu of room.powerups) {
-            const d = Math.sqrt(distSq(bot.x, bot.y, pu.x, pu.y));
-            if (d < nearestPowerupDist) {
-                nearestPowerupDist = d;
-                nearestPowerup = pu;
+        if (!bot.power) {
+            for (const pu of room.powerups) {
+                const d = Math.sqrt(distSq(bot.x, bot.y, pu.x, pu.y));
+                if (d < nearestPowerupDist) {
+                    nearestPowerupDist = d;
+                    nearestPowerup = pu;
+                }
             }
         }
 
         bs.targetPlayerId = nearestEnemy ? nearestEnemy.id : null;
+        bs.targetPowerupId = nearestPowerup ? nearestPowerup.id : null;
     } else {
         // Use cached target
         if (bs.targetPlayerId) {
@@ -207,8 +212,7 @@ function updateBot(room, bot, bs) {
     }
 
     // Add aim wobble (medium difficulty)
-    const wobble = (Math.random() - 0.5) * AIM_WOBBLE_RAD * 2;
-    const cosW = Math.cos(wobble), sinW = Math.sin(wobble);
+    const cosW = Math.cos(bs.wobble), sinW = Math.sin(bs.wobble);
     const finalDx = steerDx * cosW - steerDy * sinW;
     const finalDy = steerDx * sinW + steerDy * cosW;
 

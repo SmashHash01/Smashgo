@@ -123,8 +123,20 @@ NeonDelivery.Multiplayer = (function() {
                     v.targetX = p.x;
                     v.targetY = p.y;
                     v.targetAngle = p.angle;
-                    v.vx = p.vx || 0;
-                    v.vy = p.vy || 0;
+                    
+                    if (!isLocal) {
+                        v.vx = p.vx || 0;
+                        v.vy = p.vy || 0;
+                    } else {
+                        // For local player, only accept server velocity if we're hugely desynced (e.g. wall collision/knockback).
+                        // This prevents the 66ms-old server snapshot from stuttering/locking our local steering.
+                        const distErr = Math.hypot(p.x - v.renderX, p.y - v.renderY);
+                        if (distErr > 120) {
+                            v.vx = p.vx || 0;
+                            v.vy = p.vy || 0;
+                        }
+                    }
+                    
                     v.health = p.health;
                     v.alive = p.alive;
                     v.username = p.username;
